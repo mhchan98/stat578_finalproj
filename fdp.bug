@@ -1,0 +1,17 @@
+model {
+  for (i in 1:length(y)) {
+    y[i] ~ dnorm(inprod(X.defense[i, ], beta.defense), sigmasqinv)
+  }
+  
+  # The entry of the beta.defense corresponds to Opponent:Position
+  # In our model, each pool based on position
+  for (p in 1:Num.Position) {
+    for (t in 1:Num.Opponent) {
+      beta.defense[(p-1) * Num.Opponent + t] ~ dnorm(delta[p], 1/100^2)
+    }
+    delta[p] ~ dnorm(0, 1/100^2)
+  }
+  
+  sigmasqinv ~ dgamma(0.0001, 0.0001)
+  sigmasq <- 1/sigmasqinv
+}
