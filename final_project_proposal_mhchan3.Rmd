@@ -1,5 +1,5 @@
 ---
-title: "*A Bayesian Approach to Predicting NFL Quarterback Scores in Fanduel Tournaments"
+title: "A Bayesian Approach to Predicting NFL Quarterback Scores in Fanduel Tournaments"
 author: 'STAT 578, Fall 2017, **Team 5**: Aaron Ray, Kiomars Nassiri, Michael Chan'
 date: "October 25, 2017"
 output:
