@@ -1,67 +1,71 @@
 ---
-title: 'STAT 578: Bayesian Hierarchical Modeling Final Project Proposal'
-author: "Aaron Ray, Kiomars Nassiri Kahnamooee, Michael Chan, Mohammad Pezeshki"
-date: 'Due: Oct 25, 11:59 PM PDT'
+title: "Bayesian-Based Fantasy Football Prediction Model Proposal"
+author: 'STAT 578, Fall 2017, **Team 5**: Aaron Ray, Kiomars Nassiri, Michael Chan'
+date: "October 25, 2017"
 output:
   pdf_document:
-    toc: yes
   html_document:
-    theme: readable
-    toc: yes
+    highlight: haddock
+    theme: spacelab
 ---
-
-# Final Project Proposal
 
 ```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
 options(scipen = 1, digits = 4, width = 80)
 ```
 
-# Introduction
+# Project Description
 
-## Project Members
+National Football League (NFL), being one of the major professional sports leagues in North America, has a wide audience. One segment of the audience follows NFL in the context of Fantasy Football. Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual footbal team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition. 
+For the purpose of this project we have chosen to work with the data gathered from the **[FanDuel](https://www.fanduel.com/)** internet company. We will use Bayesian hierarchical modeling techniques to predict the FanDuel points of different NFL players. The goal is to predict the FanDuel point of each player in the next game given explanatory variables and provide a posterior credible interval.
+The analysis is conducted based on the idea presented in the article, **[Bayesian Hierarchical Modeling Applied to Fantasy Football Projections for Increased Insight and Confidence](http://srome.github.io/Bayesian-Hierarchical-Modeling-Applied-to-Fantasy-Football-Projections-for-Increased-Insight-and-Confidence/)**, by Scott Rome.
 
-- Aaron Ray (aaronwr2@illinois.edu)
-- Kiomars Nassiri Kahnamooee (nassiri2@illinois.edu)
-- Michael Chan (mhchan3@illinois.edu)
-- Mohammad Pezeshki (mp13@illinois.edu)
+# Team Members
 
-Contact Person: Aaron Ray
+- **Aaron Ray** (aaronwr2@illinois.edu)$^*$
+- **Kiomars Nassiri** (nassiri2@illinois.edu)
+- **Michael Chan** (mhchan3@illinois.edu)
 
+$^*$Contact Person
 
-## Proposed title for the project
+# Dataset Description
 
-**A Bayesian Statistical Approach to Predicting Fantasy Football**
+Team has set up a process to gather the historical data from the [RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0) website. The following is the code used to get the data from RotoGuru:
 
-## Project Description
+```{r, message=FALSE, warning=FALSE,eval=FALSE}
+# Scrape rotoguru1 site for weekly FanDuel stats and bind each week's data to the 
+# pre-defined dataframe, 'd'.
 
-National Football League (NFL), being one of the major professional sports leagues in North America, has a wide audience. One segment of the audience follows NHL in the context of Fantasy Football.  In this project, we will use Bayesian Hierarchical technique to predict the Fan Duel Points of a NHL player.  The goal is to predict the fan duel point of each player in the next game given explanatory variables and provides a posterior credible interval.  
+for(year in 2014:2017){
+  for(week in 1:16){
+    page = read_html(
+      gsub(" ","",
+           paste("http://rotoguru1.com/cgi-bin/fyday.pl?week=",week,"&year=",
+                 year ,"&game=fd&scsv=1")
+      ))
+    dtext = page %>% html_nodes("pre") %>% html_text(trim = TRUE)
+    dtable = read.table(text=dtext, sep = ";", header=TRUE, col.names = cnames,
+                        quote=NULL)
+    d = rbind(d,dtable)
+  }
+}
+```
 
-The analysis is based on the idea presented in the article, Bayesian Hierarchical Modeling Applied to Fantasy Football Projections for Increased Insight and Confidence, by Scott Rome.  [http://srome.github.io/Bayesian-Hierarchical-Modeling-Applied-to-Fantasy-Football-Projections-for-Increased-Insight-and-Confidence/]  
+Data cleaning is performed using Excel and R routine. Some data cleaning tasks are needed to calculate Player rank.
 
+## Response Variables
 
-## Description of Dataset
+- `FanDuelPts`: Points gained by the player
 
-The source of the data for this project: http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0
+## Predictor Variables
 
-Data cleaning is performed using Excel and R routine.  Some data cleaning tasks are needed to calculate Player rank.
+- `6GmAvgOppPAP`: The six game average Opposing Points Allowed to Position (OppPAP) by the current player's opposing defense. For example, if the Buffalo Bills defense allowed a total of 30 points per game to wide receivers for six games straight, then this number would equal to the average of 30 for any wide receiver facing the Bills defense.
+- `Position`: The position the player plays
+- `Opponent`: The team that the player plays against
+- `Rank`: The rank of a player based on recent performance
 
+# Analysis Ideas
 
-### Potential Response Variables
-
-- `FanDuelPts`           Position in final standings
-
-### Predictor Variables
-
-- `6GmAvgOppPAP`         The six game average Opposing Points Allowed to Position (OppPAP) by the current player's opposing defense. For example, if the Buffalo Bills defense allowed a total of 30 points per game to wide receivers for six games straight, then this number would equal to the average of 30 for any wide receiver facing the Bills defense.
-
-- `Position`         The position the player plays
-- `Opponent`         The team that the player plays against
-- `Rank`             The rank of a player based on recent performance
-
-## Analysis Ideas
-
-At the loweest level, we model the performance(`FanDuelPts`) as normally distributed around a true value.  The model is:
-
+At the lowest level, we model the performance (`FanDuelPts`) as normally-distributed around a true value:
 
 $y|\alpha, \beta_{defense}, \beta_{home}, \beta_{away}, \sigma_r^2 \sim N(\alpha + X_{defense} . \beta_{defense} + X_{home} . \beta_{home} + X_{away} . \beta_{away}, \sigma_y^2 I)$
 
@@ -77,12 +81,7 @@ $\beta_{away,p,r}$ = Away coefficient for position p and a rank r player
 
 $y$ = `FanDuelPts`
 
-$x_{t,p}$ = interaction indicator term for team t, position p
-
-$x_{p,r}$ = interaction indicator term for rank r, position p
-
-
-At higher level, we model the defense effect, $\beta_{defense}$, as how good a player is when playing against a particular team.  We pool the effect based on the position of the player.  That is, the defense coefficient is normally distributed from the same position specific distribution.
+At higher level, we model the defense effect, $\beta_{defense}$, as how good a player is when playing against a particular team.  We pool the effect based on the position of the player.  That is, the defense coefficient is normally distributed from the same position-specific distribution.
 
 $\beta_{defense,t,p} \sim N(\delta_p, \sigma_{\delta}^2)$
 
@@ -101,143 +100,3 @@ $\sigma_{\delta} \sim N(0, 100^2)$
 $\sigma_{\eta} \sim N(0, 100^2)$
 
 $\sigma_{\rho} \sim N(0, 100^2)$
-
-Here is the JAGS model:
-
-```{r eval=FALSE}
-model {
-  for (i in 1:length(y)) {
-    y[i] ~ dnorm(inprod(X.defense[i, ], beta.defense) 
-                 + inprod(X.home[i, ], beta.home) 
-                 + inprod(X.away[i, ], beta.away), sigmasqinv)
-  }
-  
-  # The entry of the beta.defense corresponds to Opponent:Position
-  # In our model, we pool the beta.defense based on position. 
-  # i.e. All defense effects of the same position are drawn from the same distribution
-  for (p in 1:Num.Position) {
-    for (t in 1:Num.Opponent) {
-      beta.defense[(p-1) * Num.Opponent + t] ~ dnorm(delta[p], 1/100^2)
-    }
-    delta[p] ~ dnorm(0, 1/100^2)
-  }
-  
-  # The entry of the beta.home and beta.away corresponds to Rank:Position
-  # In our model, we pool the beta.home/away based on rank
-  for (r in 1:Num.Rank) {
-    for (t in 1:Num.Position) {
-      beta.home[(r-1) * Num.Position + t] ~ dnorm(eta[r], 1/100^2)
-      beta.away[(r-1) * Num.Position + t] ~ dnorm(rho[r], 1/100^2)
-    }
-    eta[r] ~ dnorm(0, 1/100^2)
-    rho[r] ~ dnorm(0, 1/100^2)
-  }  
-  
-  sigmasqinv ~ dgamma(0.0001, 0.0001)
-  sigmasq <- 1/sigmasqinv
-}
-
-```
-
-
-## Sample Data
-
-```{r}
-fdp <- read.csv("fdp.csv", sep = '\t', header = TRUE)
-
-head(fdp)
-```
-
-*Derived data*
-```{r}
-#Rank player based on current FanDuelPts 
-
-#(This is cheating as it is looking at future, we'll fix it after more data
-# clean up work - This is done only for getting some data to play with in this
-# preminlinary research)
-
-year_week = unique(fdp[,c('Year','Week')])
-rank_column = "FanDuelPts"
-fdp['Rank'] = NA
-for (i in 1:nrow(year_week)) {
-  fdp_year_week = fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'], ]
-  fdp_year_week_quantile = quantile(fdp_year_week[rank_column], c(0.25, 0.5, 0.75), na.rm = TRUE)
-  
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] < fdp_year_week_quantile[1], 'Rank'] = 'Rank4'
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] >= fdp_year_week_quantile[1] 
-      & fdp[rank_column] < fdp_year_week_quantile[2], 'Rank'] = 'Rank3'
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] >= fdp_year_week_quantile[2] 
-      & fdp[rank_column] < fdp_year_week_quantile[3], 'Rank'] = 'Rank2'
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] >= fdp_year_week_quantile[3], 'Rank'] = 'Rank1'
-}
-```
-
-```{r}
-fdp['Locality'] = 'Away'
-fdp[fdp$Home.Game == 1, 'Locality'] = 'Home'
-
-```
-
-
-
-** The following R code is for reference and preliminary research **
-```{r}
-fdp_train=fdp[fdp$Year == 2016, ]
-
-X.defense = model.matrix(~ 0 + Opponent:Position , data=fdp_train)
-X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-
-X = cbind(X.defense, X.home, X.away)
-
-Num.Opponent = length(unique(fdp[, "Opponent"]))
-Num.Position = length(unique(fdp[, "Position"]))
-Num.Rank = length(unique(fdp[, "Rank"]))
-```
-
-```{r warning=FALSE, message=FALSE}
-library(rjags)
-set.seed(20171008)
-
-```
-
-```{r}
-# Initialization List for the 4 chains
-jags.inits=list(
-  list( sigmasqinv=    0.01, 
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
-  list( sigmasqinv=    0.01, 
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
-  list( sigmasqinv=0.000001, 
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
-  list( sigmasqinv=0.000001, 
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
-)
-
-data.jags <- list(
-  y= fdp_train$FanDuelPts,
-  X.defense = X.defense,
-  X.home = X.home,
-  X.away = X.away,
-  Num.Position=Num.Position,
-  Num.Opponent=Num.Opponent,
-  Num.Rank=Num.Rank
-)
-```
-
-
-```{r warning=FALSE}
-m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
-```
-
-```{r warning=FALSE,eval=FALSE}
-update(m, 2500) # burn-in
-
-x <- coda.samples(m1, c("delta","beta.defense", "sigmasq"), n.iter=5000)
-```
-
-
