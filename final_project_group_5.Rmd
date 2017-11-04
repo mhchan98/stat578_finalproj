@@ -147,7 +147,7 @@ model {
 ## Sample Data
 
 ```{r}
-fdp <- read.csv("fdp.csv", sep = '\t', header = TRUE)
+fdp <- read.csv("fdpfinal.csv", sep = '\t', header = TRUE)
 
 head(fdp)
 ```

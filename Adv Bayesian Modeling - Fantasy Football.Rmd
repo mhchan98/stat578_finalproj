@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(rvest)
 library(rjags)
 library(MASS)
+library(lattice)
 library(magrittr)
 library(qdap)
 library(TTR)
@@ -21,7 +22,8 @@ library(moments)
 This section is dedicated to gathering statistics for 2017 FanDuel Football Stats. For the source of this data see <http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=3&inact=0&maxprc=99999&outcsv=0>.
 
 
-```{r}
+*Get Raw Data*
+```{r eval=FALSE}
 #Initiate primary dataframe with 10 column names
 d = data.frame(matrix(ncol=10,nrow=1))
 cnames = c("Week","Year","PlayerId","Name","Position","Team","HomeGame","Opponent","FanDuelPts","FanDuelSalary")
@@ -41,8 +43,19 @@ for(year in 2014:2017){
   
 }
 
+write.csv(d, file = "rawfdp.csv",row.names=FALSE, na="")
+```
+
+```{r}
+d <- read.csv("rawfdp.csv", sep = ',', header = TRUE)
+d$Opponent <- lapply(d$Opponent, as.character)
+```
+
+*Basic clean up*
+```{r}
+
 #Clean up
-##Revove null row
+##Remove null row
 d2=d[-1,]
 ##Remove invalid entries
 d2=d2[d2$Opponent>"-",]
@@ -64,58 +77,121 @@ d2$Opponent = mgsub(tmabbs,tmnames,d2$Opponent)
 #Create YearWeek for each year/week combo
 d2=d2[order(d2$Opponent,d2$Position,d2$Year,d2$Week),]
 d2$YearWeek = d2$Year*100+d2$Week
+```
 
+*Generate moving 7 week team defense statistics*
+```{r}
 
 #Calculate the 6 week running mean, median, and std deviation of total points scored against each defense by each position
 dPAP = aggregate(FanDuelPts~Year+YearWeek+Position+Opponent, data=d2, FUN=sum)
 dPAP = dPAP[order(dPAP$Opponent,dPAP$Position,dPAP$YearWeek),]
-dPAP$AvgOppPAP7Wks = runMean(dPAP$FanDuelPts,n=7)
-dPAP$SdOppPAP7Wks = runSD(dPAP$FanDuelPts,n=7)
-dtemp = rbind(dPAP[-1,],dPAP[1,])
-dPAP[,1:5] = dtemp[,1:5]
-dPAP = dPAP[,-5]
 
+# Calculate AvgOppPAP7Wks - The 7 weeks average points that were scored on by players who play a certain position for a given team
+opponent_position_pairs = unique(dPAP[,c('Opponent','Position')])
+for (i in 1:nrow(opponent_position_pairs)) {
+  dPAP.which = which(dPAP$Opponent == opponent_position_pairs[i, 'Opponent'] & dPAP$Position == opponent_position_pairs[i, 'Position'])
+  dPAP[dPAP.which, 'AvgOppPAP7Wks'] = runMean(dPAP[dPAP.which, 'FanDuelPts'],n=7)
+  dPAP[dPAP.which, 'SdOppPAP7Wks'] = runSD(dPAP[dPAP.which, 'FanDuelPts'],n=7)
+  
+  # shift down by 1 row, as it should be the average score of LAST n weeks(excluding current week)
+  dtemp = dPAP[dPAP.which, ]
+  
+  dtemp = rbind(NA, dtemp[1:nrow(dtemp)-1, ])
+  dPAP[dPAP.which, 'AvgOppPAP7Wks'] = dtemp$AvgOppPAP7Wks
+  dPAP[dPAP.which, 'SdOppPAP7Wks'] = dtemp$SdOppPAP7Wks
+}
+
+dPAP = dPAP[c("Year","YearWeek","Position","Opponent","AvgOppPAP7Wks", "SdOppPAP7Wks")]
+```
+
+```{r}
 #Calculate mean and std deviation of MedOppPAP7Wks for all defenses
 dPAP2 = data.frame(aggregate(dPAP$AvgOppPAP7Wks ~ Position, data=dPAP, function(x) c(mean=mean(x), sd=sd(x))))
 dPAP2 = data.frame(Position = dPAP2$Position, OallAvgPAP = dPAP2$dPAP.AvgOppPAP7Wks[,1], OallStdevPAP = dPAP2$dPAP.AvgOppPAP7Wks[,2])
 
-
 #Join the running stats to the full dataset
 d3 = merge(d2,dPAP,by=c("Year","YearWeek","Position","Opponent"))
 d3 = merge(d3,dPAP2,by="Position")
+```
 
+*Generate moving 5 week player offense statistic*
+```{r}
 #Calculate 5 week median and std deviations for each player
 d4=d3[order(d3$PlayerId,d3$YearWeek),]
-d4$AvgPts5Wks = 0
-d4$StdevPts5Wks = 0
-for(i in 1:5){ #Prep first few records
-  d4[i,]$AvgPts5Wks = d4[i,]$OallAvgPAP
-  d4[i,]$StdevPts5Wks = d4[i,]$OallStdevPAP
-}
-for(i in 6:nrow(d4)){
-    a=i-5
-    b=i-1
-  if(d4[a,]$PlayerId == d4[i,]$PlayerId){
-    d4[i,]$AvgPts5Wks = mean(d4$FanDuelPts[a:b])
-    d4[i,]$StdevPts5Wks = sd(d4$FanDuelPts[a:b])
+
+# Calculate AvgOppPAP7Wks - The 7 weeks average points that were scored on by players who play a certain position for a given team
+playerIds = unique(d4[,c('PlayerId')])
+n = 5
+for (i in 1:length(playerIds)) {
+  d4.which = which(d4$PlayerId == playerIds[i])
+  if (length(d4.which) > n) {
+    d4[d4.which, 'AvgPts5Wks'] = runMean(d4[d4.which, 'FanDuelPts'],n=n)
+    d4[d4.which, 'StdevPts5Wks'] = runSD(d4[d4.which, 'FanDuelPts'],n=n)
+    
+    # shift down by 1 row, as it should be the average score of LAST n weeks(excluding current week)
+    dtemp = d4[d4.which, ]
+    
+    dtemp = rbind(NA, dtemp[1:nrow(dtemp)-1, ])
+    d4[d4.which, 'AvgPts5Wks'] = dtemp$AvgPts5Wks
+    d4[d4.which, 'StdevPts5Wks'] = dtemp$StdevPts5Wks    
   }
-    else{
-      d4[i,]$AvgPts5Wks = d4[i,]$OallAvgPAP
-      d4[i,]$StdevPts5Wks = d4[i,]$OallStdevPAP
-    }
 }
 
+```
+
+```{r}
+# remove na
+d4 = d4[!is.na(d4$AvgPts5Wks), ]
 #Remove 2014 which was only used to calculate the first 6 running stats of 2015
 d4 = d4[d4$Year>2014,]
+```
 
+*Player Offense and defense Rank*
+```{r}
+createRankColumn <- function(data, rank_column) {
+  year_week = unique(data[,c('YearWeek')])
+  result_column = 'result_column'
+  data[result_column] = NA
+  for (i in 1:length(year_week)) {
+    data_year_week.which = which(data$YearWeek == year_week[i])
+    data_year_week = data[data$YearWeek == year_week[i], ]
+    data_year_week_quantile = quantile(data_year_week[rank_column],
+                                       c(0.25, 0.5, 0.75), na.rm = TRUE)
+    
+    data[data$YearWeek == year_week[i] 
+        & data[rank_column] < data_year_week_quantile[1],
+        result_column] = 'Rank4'
+    data[data$YearWeek == year_week[i]
+        & data[rank_column] >= data_year_week_quantile[1] 
+        & data[rank_column] < data_year_week_quantile[2],
+        result_column] = 'Rank3'
+    data[data$YearWeek == year_week[i]
+        & data[rank_column] >= data_year_week_quantile[2] 
+        & data[rank_column] < data_year_week_quantile[3],
+        result_column] = 'Rank2'
+    data[data$YearWeek == year_week[i] 
+        & data[rank_column] >= data_year_week_quantile[3],
+        result_column] = 'Rank1'  
+  }
+  data[result_column]
+}
+
+#Rank player based on current AvgPts5Wks 
+d4['OffRnk5Wks'] = createRankColumn(d4, 'AvgPts5Wks')
+d4['DefRnk7Wks'] = createRankColumn(d4, 'AvgOppPAP7Wks')
+
+# Alternative approach
 #Rank defense against position based on rounded # of standard deviations from the overall average
-d4$DefRnk7Wks = round(abs((d4$AvgOppPAP7Wks-d4$OallAvgPAP)/d4$OallStdevPAP))+1
-summary(d4$DefRnk7Wks)
+#d4$DefRnk7Wks = round(abs((d4$AvgOppPAP7Wks-d4$OallAvgPAP)/d4$OallStdevPAP))+1
+#summary(d4$DefRnk7Wks)
+```
+
+```{r}
 
 head(d4)
-path = rstudioapi::getSourceEditorContext()$path
-path = gsub(sub("(.*?).*\\/","",path),"fdpfinal.csv",path)
-write.csv(d4, file = path,row.names=FALSE, na="")
+#path = rstudioapi::getSourceEditorContext()$path
+#path = gsub(sub("(.*?).*\\/","",path),"fdpfinal.csv",path)
+write.csv(d4, file = "fdpfinal.csv",row.names=FALSE, na="")
 ```
 
 
