@@ -66,13 +66,18 @@ Data cleaning is performed using R routines. Some data cleaning tasks are needed
 
 # Analysis Ideas
 
+## Model
+
+
+
+
 At the lowest level, we model the performance (`FanDuelPts`) as normally-distributed around a true value:
 
 $y|\alpha, \beta_{defense}, \beta_{home}, \beta_{away}, \sigma_r^2 \sim N(\alpha + X_{defense} . \beta_{defense} + X_{home} . \beta_{home} + X_{away} . \beta_{away}, \sigma_y^2 I)$
 
 where
 
-$\alpha$ = `6GmAvgOppPAP`
+$\alpha$ = `OffRnk5Wks`
 
 $\beta_{defense,t,p}$ = defense coefficient against team t for position p
 
@@ -108,10 +113,12 @@ $\sigma_{\rho} \sim N(0, 100^2)$
 
 Here is the JAGS model:
 
-```{r eval=FALSE}
+```{r}
+sink("fdp.bug")
+cat("
 model {
   for (i in 1:length(y)) {
-    y[i] ~ dnorm(inprod(X.defense[i, ], beta.defense) 
+    y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
                  + inprod(X.home[i, ], beta.home) 
                  + inprod(X.away[i, ], beta.away), sigmasqinv)
   }
@@ -140,6 +147,8 @@ model {
   sigmasqinv ~ dgamma(0.0001, 0.0001)
   sigmasq <- 1/sigmasqinv
 }
+    ",fill = TRUE)
+sink()
 
 ```
 
@@ -147,40 +156,15 @@ model {
 ## Sample Data
 
 ```{r}
-fdp <- read.csv("fdpfinal.csv", sep = '\t', header = TRUE)
+fdp <- read.csv("fdpfinal.csv", sep = ',', header = TRUE)
 
 head(fdp)
 ```
 
-*Derived data*
-```{r}
-#Rank player based on current FanDuelPts 
 
-#(This is cheating as it is looking at future, we'll fix it after more data
-# clean up work - This is done only for getting some data to play with in this
-# preminlinary research)
-
-year_week = unique(fdp[,c('Year','Week')])
-rank_column = "FanDuelPts"
-fdp['Rank'] = NA
-for (i in 1:nrow(year_week)) {
-  fdp_year_week = fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'], ]
-  fdp_year_week_quantile = quantile(fdp_year_week[rank_column], c(0.25, 0.5, 0.75), na.rm = TRUE)
-  
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] < fdp_year_week_quantile[1], 'Rank'] = 'Rank4'
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] >= fdp_year_week_quantile[1] 
-      & fdp[rank_column] < fdp_year_week_quantile[2], 'Rank'] = 'Rank3'
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] >= fdp_year_week_quantile[2] 
-      & fdp[rank_column] < fdp_year_week_quantile[3], 'Rank'] = 'Rank2'
-  fdp[fdp$Year == year_week[i, 'Year'] & fdp$Week == year_week[i, 'Week'] 
-      & fdp[rank_column] >= fdp_year_week_quantile[3], 'Rank'] = 'Rank1'
-}
-```
 
 ```{r}
+fdp['Rank'] = fdp$OffRnk5Wks
 fdp['Locality'] = 'Away'
 fdp[fdp$Home.Game == 1, 'Locality'] = 'Home'
 
@@ -190,7 +174,7 @@ fdp[fdp$Home.Game == 1, 'Locality'] = 'Home'
 
 ** The following R code is for reference and preliminary research **
 ```{r}
-fdp_train=fdp[fdp$Year == 2016, ]
+fdp_train=fdp[fdp$Year == 2015, ]
 
 X.defense = model.matrix(~ 0 + Opponent:Position , data=fdp_train)
 X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
@@ -202,6 +186,23 @@ Num.Opponent = length(unique(fdp[, "Opponent"]))
 Num.Position = length(unique(fdp[, "Position"]))
 Num.Rank = length(unique(fdp[, "Rank"]))
 ```
+
+### Simple Ideas
+
+
+
+$y|\alpha \sim N(\alpha,\sigma_y^2 I)$
+
+```{r}
+mod.classic = lm(FanDuelPts ~ AvgPts5Wks, data = fdp)
+
+plot(FanDuelPts ~ AvgPts5Wks, data = fdp)
+```
+
+All over the place, let's add the team defense
+
+
+`X.defense` is the indicator matrix
 
 ```{r warning=FALSE, message=FALSE}
 library(rjags)
@@ -224,6 +225,7 @@ jags.inits=list(
 
 data.jags <- list(
   y= fdp_train$FanDuelPts,
+  alpha = fdp_train$OffRnk5Wks,
   X.defense = X.defense,
   X.home = X.home,
   X.away = X.away,
@@ -235,13 +237,24 @@ data.jags <- list(
 
 
 ```{r warning=FALSE}
-m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
+runModel=FALSE
+
+if (runModel) {
+  m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
+  update(m, 2500) # burn-in
+  
+  x <- coda.samples(m, c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq"), n.iter=5000)  
+  save(file="fdp.jags.model.Rdata", list="m")
+  save(file="fdp.jags.samples.Rdata", list="x")
+} else {
+  load("fdp.jags.samples.Rdata")
+}
 ```
 
-```{r warning=FALSE,eval=FALSE}
-update(m, 2500) # burn-in
-
-x <- coda.samples(m1, c("delta","beta.defense", "sigmasq"), n.iter=5000)
+*Check convergence*
+```{r fig.width=10,fig.height=11}
+plot(x, smooth=FALSE)
 ```
+
 
 
