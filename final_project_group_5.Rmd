@@ -238,13 +238,21 @@ data.jags <- list(
 
 ```{r warning=FALSE}
 runModel=FALSE
+runSample=TRUE
 
+NSim = 10000
 if (runModel) {
   m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
   update(m, 2500) # burn-in
   
-  x <- coda.samples(m, c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq"), n.iter=5000)  
   save(file="fdp.jags.model.Rdata", list="m")
+} else {
+  load("fdp.jags.model.Rdata")
+  m$recompile()
+}
+
+if (runSample) {
+  x <- coda.samples(m, c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq"), n.iter=NSim)  
   save(file="fdp.jags.samples.Rdata", list="x")
 } else {
   load("fdp.jags.samples.Rdata")
@@ -252,6 +260,16 @@ if (runModel) {
 ```
 
 *Check convergence*
+```{r}
+gelman.diag(x, autoburnin=FALSE)
+```
+
+*Not converged*
+```{r}
+m.upd <- update(m, n.iter=5000)
+```
+
+
 ```{r fig.width=10,fig.height=11}
 plot(x, smooth=FALSE)
 ```
