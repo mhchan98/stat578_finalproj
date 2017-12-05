@@ -191,7 +191,7 @@ All over the place, let's add the team defense
 
 ** Set up train data **
 ```{r}
-fdp_train=fdp[fdp$Year == 2015 & fdp$Position=="QB", ]
+fdp_train=fdp[fdp$Year == 2015, ]
 fdp_train = droplevels(fdp_train)
 
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
@@ -226,21 +226,21 @@ set.seed(20171008)
 ```{r}
 # Initialization List for the 4 chains
 jags.inits=list(
-  list( sigmasqinv=    0.01,  delta = -10000,
-        eta = c(10000, -10000, 10000),
-        rho = c(-10000, 10000, -10000),
+  list( sigmasqinv=    0.01,  delta = rep(-10000, Num.Position),
+        eta = c(10000, -10000, 10000, -10000)[1:Num.Rank],
+        rho = c(-10000, 10000, -10000, 10000)[1:Num.Rank],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
-  list( sigmasqinv=    0.01,  delta =  10000,
-        eta = c(10000, -10000, -10000),
-        rho = c(-10000, 10000, 10000),
+  list( sigmasqinv=    0.01,  delta = rep(10000, Num.Position),
+        eta = c(10000, -10000, -10000, 10000)[1:Num.Rank],
+        rho = c(-10000, 10000, 10000, -10000)[1:Num.Rank],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
-  list( sigmasqinv=0.000001,  delta = -10000,
-        eta = c(-10000, 10000, -10000),
-        rho = c(10000, -10000, 10000),
+  list( sigmasqinv=0.000001,  delta = rep(-10000, Num.Position),
+        eta = c(-10000, 10000, -10000, 10000)[1:Num.Rank],
+        rho = c(10000, -10000, 10000, -10000)[1:Num.Rank],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
-  list( sigmasqinv=0.000001,  delta =  10000,
-        eta = c(-10000, 10000, 10000),
-        rho = c(10000, -10000, -10000),
+  list( sigmasqinv=0.000001,  delta = rep(10000, Num.Position),
+        eta = c(-10000, 10000, 10000, -10000)[1:Num.Rank],
+        rho = c(10000, -10000, -10000, 10000)[1:Num.Rank],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
 )
 
@@ -282,8 +282,8 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col) {
 ```
 
 ```{r warning=FALSE}
-runModel=TRUE
-runSample=TRUE
+runModel=FALSE
+runSample=FALSE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -308,11 +308,12 @@ if (runSample) {
     (end_time <- Sys.time())
     (result$gelman.R.max)    
   }
-  save(file="fdp.jags.samples.Rdata", list="result")
-  save(file="fdp.jags.model.Rdata", list="m")
+  save(file=paste("fdp.jags.samples.", N.burnin, ".Rdata", sep=""), list="result")
+  save(file=paste("fdp.jags.model.", N.burnin, ".Rdata", sep=""), list="m")
 } else {
-  load("fdp.jags.samples.Rdata")
   N.burnin=2500/2 * (2**N.Retry.Loop)
+  load(paste("fdp.jags.samples.", N.burnin, ".Rdata", sep=""))
+  load(paste("fdp.jags.model.", N.burnin, ".Rdata", sep=""))
 }
 ```
 
