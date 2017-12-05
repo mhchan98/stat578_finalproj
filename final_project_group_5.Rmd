@@ -114,8 +114,8 @@ $\sigma_{\rho} \sim N(0, 100^2)$
 Here is the JAGS model:
 
 ```{r}
-sink("fdp.bug")
-cat("
+#sink("fdp.bug")
+#cat("
 model {
   for (i in 1:length(y)) {
     y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
@@ -147,8 +147,8 @@ model {
   sigmasqinv ~ dgamma(0.0001, 0.0001)
   sigmasq <- 1/sigmasqinv
 }
-    ",fill = TRUE)
-sink()
+#    ",fill = TRUE)
+#sink()
 
 ```
 
@@ -171,22 +171,6 @@ fdp[fdp$Home.Game == 1, 'Locality'] = 'Home'
 ```
 
 
-
-** The following R code is for reference and preliminary research **
-```{r}
-fdp_train=fdp[fdp$Year == 2015, ]
-
-X.defense = model.matrix(~ 0 + Opponent:Position , data=fdp_train)
-X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-
-X = cbind(X.defense, X.home, X.away)
-
-Num.Opponent = length(unique(fdp[, "Opponent"]))
-Num.Position = length(unique(fdp[, "Position"]))
-Num.Rank = length(unique(fdp[, "Rank"]))
-```
-
 ### Simple Ideas
 
 
@@ -203,6 +187,32 @@ All over the place, let's add the team defense
 
 
 `X.defense` is the indicator matrix
+
+
+** Set up train data **
+```{r}
+#fdp_train=fdp[fdp$Year == 2015, ]
+fdp_train=fdp[fdp$Year == 2015 & fdp$Position=="QB", ]
+fdp_train = droplevels(fdp_train)
+
+Num.Opponent = length(unique(fdp_train[, "Opponent"]))
+Num.Position = length(unique(fdp_train[, "Position"]))
+Num.Rank = length(unique(fdp_train[, "Rank"]))
+
+if (Num.Position == 1) {
+  X.defense = model.matrix(~ 0 + Opponent , data=fdp_train)
+  X.home = model.matrix(~ 0 + Rank , data=fdp_train)
+  X.away = model.matrix(~ 0 + Rank , data=fdp_train)
+} else {
+  X.defense = model.matrix(~ 0 + Opponent:Position , data=fdp_train)
+  X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+  X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+}
+
+X = cbind(X.defense, X.home, X.away)
+```
+
+
 
 ```{r warning=FALSE, message=FALSE}
 library(rjags)
@@ -225,7 +235,7 @@ jags.inits=list(
 
 data.jags <- list(
   y= fdp_train$FanDuelPts,
-  alpha = fdp_train$OffRnk5Wks,
+  alpha = fdp_train$AvgPts5Wks,
   X.defense = X.defense,
   X.home = X.home,
   X.away = X.away,
@@ -236,38 +246,88 @@ data.jags <- list(
 ```
 
 
+
 ```{r warning=FALSE}
-runModel=FALSE
+burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col) {
+  update(m, N.burnin) # burn-in
+  
+  x <- coda.samples(m, mon.col, n.iter=N.iter)
+  
+  if(show.plot) {
+    plot(x, smooth=FALSE)
+  }
+  
+  gelman.R = gelman.diag(x, autoburnin=FALSE, multivariate = FALSE)
+  print(gelman.R)
+  
+  result <- list(
+    coda.sam = x, 
+    gelman.R.max=max(gelman.R$psrf[, 1])
+  )
+  
+  return(result)
+}
+
+```
+
+```{r warning=FALSE}
+runModel=TRUE
 runSample=TRUE
 
-NSim = 10000
+mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
+
+NSim = 5000
 if (runModel) {
   m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
-  update(m, 2500) # burn-in
-  
   save(file="fdp.jags.model.Rdata", list="m")
 } else {
   load("fdp.jags.model.Rdata")
   m$recompile()
 }
 
+load.module("dic")
+
+N.Retry.Loop = 11
 if (runSample) {
-  x <- coda.samples(m, c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq"), n.iter=NSim)  
-  save(file="fdp.jags.samples.Rdata", list="x")
+  N.burnin=2500/2
+  for (loopIdx in 1:N.Retry.Loop) {
+    (start_time <- Sys.time())
+    (N.burnin = N.burnin * 2)
+    result = burnAndSample(m, N.burnin, NSim, show.plot=FALSE, mon.col = mon.col)
+    (end_time <- Sys.time())
+    (result$gelman.R.max)    
+  }
+  save(file="fdp.jags.samples.Rdata", list="result")
+  save(file="fdp.jags.model.Rdata", list="m")
 } else {
   load("fdp.jags.samples.Rdata")
+  N.burnin=2500/2 * (2**N.Retry.Loop)
 }
 ```
 
-*Check convergence*
-```{r}
-gelman.diag(x, autoburnin=FALSE)
+```{r warning=FALSE}
+m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
+load.module("dic")
+
 ```
 
-*Not converged*
-```{r}
-m.upd <- update(m, n.iter=5000)
+*Run and Check convergence*
+```{r fig.width=10,fig.height=11}
+N.burnin=2500
+result = burnAndSample(m, N.burnin, 5000, show.plot=FALSE, mon.col = mon.col)
 ```
+
+
+Not converged as `gelman.R.max` = `r result$gelman.R.max` > 1.1
+
+*Try#2: Double burn in and Re run with `N.burnin`=`r N.burnin * 2`*
+```{r fig.width=10,fig.height=11}
+N.burnin = N.burnin * 2
+result = burnAndSample(m, N.burnin, 5000, show.plot=FALSE, mon.col = mon.col)
+```
+
+Not converged as `gelman.R.max` = `r result$gelman.R.max` > 1.1
+
 
 
 ```{r fig.width=10,fig.height=11}
