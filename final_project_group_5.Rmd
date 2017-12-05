@@ -113,7 +113,7 @@ $\sigma_{\rho} \sim N(0, 100^2)$
 
 Here is the JAGS model:
 
-```{r}
+```{r eval=FALSE}
 #sink("fdp.bug")
 #cat("
 model {
@@ -123,25 +123,22 @@ model {
                  + inprod(X.away[i, ], beta.away), sigmasqinv)
   }
   
-  # The entry of the beta.defense corresponds to Opponent:Position
   # In our model, we pool the beta.defense based on position. 
   # i.e. All defense effects of the same position are drawn from the same distribution
   for (p in 1:Num.Position) {
-    for (t in 1:Num.Opponent) {
-      beta.defense[(p-1) * Num.Opponent + t] ~ dnorm(delta[p], 1/100^2)
-    }
-    delta[p] ~ dnorm(0, 1/100^2)
+    beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
+    delta[p] ~ dnorm(0, 1/1000^2)
   }
   
   # The entry of the beta.home and beta.away corresponds to Rank:Position
   # In our model, we pool the beta.home/away based on rank
   for (r in 1:Num.Rank) {
     for (t in 1:Num.Position) {
-      beta.home[(r-1) * Num.Position + t] ~ dnorm(eta[r], 1/100^2)
-      beta.away[(r-1) * Num.Position + t] ~ dnorm(rho[r], 1/100^2)
+      beta.home[(r-1) * Num.Position + t] ~ dnorm(eta[r], 1/1000^2)
+      beta.away[(r-1) * Num.Position + t] ~ dnorm(rho[r], 1/1000^2)
     }
-    eta[r] ~ dnorm(0, 1/100^2)
-    rho[r] ~ dnorm(0, 1/100^2)
+    eta[r] ~ dnorm(0, 1/1000^2)
+    rho[r] ~ dnorm(0, 1/1000^2)
   }  
   
   sigmasqinv ~ dgamma(0.0001, 0.0001)
@@ -166,10 +163,9 @@ head(fdp)
 ```{r}
 fdp['Rank'] = fdp$OffRnk5Wks
 fdp['Locality'] = 'Away'
-fdp[fdp$Home.Game == 1, 'Locality'] = 'Home'
+fdp[fdp$HomeGame == 1, 'Locality'] = 'Home'
 
 ```
-
 
 ### Simple Ideas
 
@@ -188,10 +184,8 @@ All over the place, let's add the team defense
 
 `X.defense` is the indicator matrix
 
-
 ** Set up train data **
 ```{r}
-#fdp_train=fdp[fdp$Year == 2015, ]
 fdp_train=fdp[fdp$Year == 2015 & fdp$Position=="QB", ]
 fdp_train = droplevels(fdp_train)
 
@@ -200,19 +194,23 @@ Num.Position = length(unique(fdp_train[, "Position"]))
 Num.Rank = length(unique(fdp_train[, "Rank"]))
 
 if (Num.Position == 1) {
-  X.defense = model.matrix(~ 0 + Opponent , data=fdp_train)
+  #X.offense = model.matrix(~ 0 + AvgPts5Wks, data=fdp_train)
+  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_train)
   X.home = model.matrix(~ 0 + Rank , data=fdp_train)
   X.away = model.matrix(~ 0 + Rank , data=fdp_train)
 } else {
-  X.defense = model.matrix(~ 0 + Opponent:Position , data=fdp_train)
+  #X.offense = model.matrix(~ 0 + AvgPts5Wks:Position, data=fdp_train)
+  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
   X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
   X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
 }
 
+
+X.home = X.home * fdp_train$HomeGame
+X.away = X.away * (1- fdp_train$HomeGame)
 X = cbind(X.defense, X.home, X.away)
+
 ```
-
-
 
 ```{r warning=FALSE, message=FALSE}
 library(rjags)
@@ -223,13 +221,21 @@ set.seed(20171008)
 ```{r}
 # Initialization List for the 4 chains
 jags.inits=list(
-  list( sigmasqinv=    0.01, 
+  list( sigmasqinv=    0.01,  delta = -10000,
+        eta = c(10000, -10000, 10000),
+        rho = c(-10000, 10000, -10000),
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
-  list( sigmasqinv=    0.01, 
+  list( sigmasqinv=    0.01,  delta =  10000,
+        eta = c(10000, -10000, -10000),
+        rho = c(-10000, 10000, 10000),
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
-  list( sigmasqinv=0.000001, 
+  list( sigmasqinv=0.000001,  delta = -10000,
+        eta = c(-10000, 10000, -10000),
+        rho = c(10000, -10000, 10000),
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
-  list( sigmasqinv=0.000001, 
+  list( sigmasqinv=0.000001,  delta =  10000,
+        eta = c(-10000, 10000, 10000),
+        rho = c(10000, -10000, -10000),
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
 )
 
@@ -240,7 +246,7 @@ data.jags <- list(
   X.home = X.home,
   X.away = X.away,
   Num.Position=Num.Position,
-  Num.Opponent=Num.Opponent,
+  #Num.Opponent=Num.Opponent,
   Num.Rank=Num.Rank
 )
 ```
@@ -271,8 +277,8 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col) {
 ```
 
 ```{r warning=FALSE}
-runModel=TRUE
-runSample=TRUE
+runModel=FALSE
+runSample=FALSE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -287,7 +293,7 @@ if (runModel) {
 
 load.module("dic")
 
-N.Retry.Loop = 15
+N.Retry.Loop = 2
 if (runSample) {
   N.burnin=2500/2
   for (loopIdx in 1:N.Retry.Loop) {
@@ -305,33 +311,9 @@ if (runSample) {
 }
 ```
 
-```{r warning=FALSE}
-m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
-load.module("dic")
-
-```
-
-*Run and Check convergence*
-```{r fig.width=10,fig.height=11}
-N.burnin=2500
-result = burnAndSample(m, N.burnin, 5000, show.plot=FALSE, mon.col = mon.col)
-```
-
-
-Not converged as `gelman.R.max` = `r result$gelman.R.max` > 1.1
-
-*Try#2: Double burn in and Re run with `N.burnin`=`r N.burnin * 2`*
-```{r fig.width=10,fig.height=11}
-N.burnin = N.burnin * 2
-result = burnAndSample(m, N.burnin, 5000, show.plot=FALSE, mon.col = mon.col)
-```
-
-Not converged as `gelman.R.max` = `r result$gelman.R.max` > 1.1
-
-
 
 ```{r fig.width=10,fig.height=11}
-plot(x, smooth=FALSE)
+plot(result$coda.sam, smooth=FALSE)
 ```
 
 
