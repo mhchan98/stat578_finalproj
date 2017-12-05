@@ -59,9 +59,10 @@ Data cleaning is performed using R routines. Some data cleaning tasks are needed
 
 ## Predictor Variables
 
-- `6GmAvgOppPAP`: The six game average Opposing Points Allowed to Position (OppPAP) by the current player's opposing defense. For example, if the Buffalo Bills defense allowed a total of 30 points per game to wide receivers for six games straight, then this number would equal to the average of 30 for any wide receiver facing the Bills defense.
+- `AvgPts5Wks`: The 5 game average points of the player
+- `AvgOppPAP7Wks` : The 7 game average Opposing Points Allowed to Position (OppPAP) by the current player's opposing defense. For example, if the Buffalo Bills defense allowed a total of 30 points per game to wide receivers for six games straight, then this number would equal to the average of 30 for any wide receiver facing the Bills defense.
 - `Position`: The position the player plays
-- `Opponent`: The team that the player plays against
+- `HomeGame`: Whether it is home game.
 - `Rank`: The rank of a player based on recent performance
 
 # Analysis Ideas
@@ -77,9 +78,9 @@ $y|\alpha, \beta_{defense}, \beta_{home}, \beta_{away}, \sigma_r^2 \sim N(\alpha
 
 where
 
-$\alpha$ = `OffRnk5Wks`
+$\alpha$ = The average fan duel point of the previous 5 weeks of the player, `AvgPts5Wks`
 
-$\beta_{defense,t,p}$ = defense coefficient against team t for position p
+$\beta_{defense,p}$ = defense coefficient against team t for position p
 
 $\beta_{home,p,r}$ = home coefficient for position p and a rank r player
 
@@ -87,29 +88,33 @@ $\beta_{away,p,r}$ = Away coefficient for position p and a rank r player
 
 $y$ = `FanDuelPts`
 
-$x_{t,p}$ = interaction indicator term for team t, position p
+$x_{p}$ = interaction indicator term for opposing team score allowed by position p
 
-$x_{p,r}$ = interaction indicator term for rank r, position p
+$x_{home,p,r}$ = interaction indicator term for rank r, position p, and whether it is home game
 
-At higher level, we model the defense effect, $\beta_{defense}$, as how good a player is when playing against a particular team.  We pool the effect based on the position of the player.  That is, the defense coefficient is normally distributed from the same position specific distribution.
+At higher level, we model the defense effect, $\beta_{defense}$, as how good(bad) a particular team's defense is against the player's position.  We pool the effect based on the position of the player.  That is, the defense coefficient is normally distributed from the same position specific distribution.
 
-$\beta_{defense,t,p} \sim N(\delta_p, \sigma_{\delta}^2)$
+$\beta_{defense,p} \sim N(\delta_p, \sigma_{\delta}^2)$
 
-For the home and away game effect, $\beta_{home}$ and $\beta_{away}$, we model the effect for player of the same rank has the same distribution.
+where $\sigma_{\delta}$ is constant = 1000
 
-$\beta_{home,r} \sim N(\eta_r, \sigma_{\eta}^2)$
+For the home and away game effect, $\beta_{home}$ and $\beta_{away}$, we model the effect for player of the same rank has the same distribution.  We model the home and away game effect to be the same for players of the same position.
 
-$\beta_{away,r} \sim N(\rho_r, \sigma_{\rho}^2)$
+$\beta_{home,p,r} \sim N(\eta_r, \sigma_{\eta}^2)$
+
+$\beta_{away,p,r} \sim N(\rho_r, \sigma_{\rho}^2)$
+
+where $\sigma_{\eta}$, $\sigma_{\rho}$ are constant = 1000
 
 We will approximate non informative prior using:
 
 $\sigma_y \sim Inv-gamma(0.0001, 0.0001)$
 
-$\sigma_{\delta} \sim N(0, 100^2)$
+$\delta \sim N(0, 10000^2)$
 
-$\sigma_{\eta} \sim N(0, 100^2)$
+$\eta \sim N(0, 10000^2)$
 
-$\sigma_{\rho} \sim N(0, 100^2)$
+$\rho \sim N(0, 10000^2)$
 
 Here is the JAGS model:
 
@@ -127,7 +132,7 @@ model {
   # i.e. All defense effects of the same position are drawn from the same distribution
   for (p in 1:Num.Position) {
     beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
-    delta[p] ~ dnorm(0, 1/1000^2)
+    delta[p] ~ dnorm(0, 1/10000^2)
   }
   
   # The entry of the beta.home and beta.away corresponds to Rank:Position
@@ -137,8 +142,8 @@ model {
       beta.home[(r-1) * Num.Position + t] ~ dnorm(eta[r], 1/1000^2)
       beta.away[(r-1) * Num.Position + t] ~ dnorm(rho[r], 1/1000^2)
     }
-    eta[r] ~ dnorm(0, 1/1000^2)
-    rho[r] ~ dnorm(0, 1/1000^2)
+    eta[r] ~ dnorm(0, 1/10000^2)
+    rho[r] ~ dnorm(0, 1/10000^2)
   }  
   
   sigmasqinv ~ dgamma(0.0001, 0.0001)
@@ -277,12 +282,12 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col) {
 ```
 
 ```{r warning=FALSE}
-runModel=FALSE
-runSample=FALSE
+runModel=TRUE
+runSample=TRUE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
-NSim = 5000
+NSim = 50000
 if (runModel) {
   m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
   save(file="fdp.jags.model.Rdata", list="m")
@@ -311,10 +316,23 @@ if (runSample) {
 }
 ```
 
-
 ```{r fig.width=10,fig.height=11}
 plot(result$coda.sam, smooth=FALSE)
 ```
+
+Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
+
+```{r}
+summary(result$coda.sam)
+```
+
+
+*Effective Sample Size*
+```{r}
+(eff.size = effectiveSize(result$coda.sam[, 1:7]))
+```
+
+The effective sample sizes of all parameters are greater than 400.
 
 
 

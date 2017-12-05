@@ -9,9 +9,7 @@ model {
   # In our model, we pool the beta.defense based on position. 
   # i.e. All defense effects of the same position are drawn from the same distribution
   for (p in 1:Num.Position) {
-    for (t in 1:Num.Opponent) {
-      beta.defense[(p-1) * Num.Opponent + t] ~ dnorm(delta[p], 1/1000^2)
-    }
+      beta.defense[p] ~ dnorm(delta[p], 1/10000^2)
     delta[p] ~ dnorm(0, 1/1000^2)
   }
   
@@ -22,8 +20,8 @@ model {
       beta.home[(r-1) * Num.Position + t] ~ dnorm(eta[r], 1/1000^2)
       beta.away[(r-1) * Num.Position + t] ~ dnorm(rho[r], 1/1000^2)
     }
-    eta[r] ~ dnorm(0, 1/1000^2)
-    rho[r] ~ dnorm(0, 1/1000^2)
+    eta[r] ~ dnorm(0, 1/10000^2)
+    rho[r] ~ dnorm(0, 1/10000^2)
   }  
   
   sigmasqinv ~ dgamma(0.0001, 0.0001)
