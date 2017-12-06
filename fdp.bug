@@ -10,7 +10,7 @@ model {
   # i.e. All defense effects of the same position are drawn from the same distribution
   for (p in 1:Num.Position) {
     beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
-    delta[p] ~ dnorm(0, 1/10000^2)
+    delta[p] ~ dnorm(0, 1/100000^2)
   }
   
   # The entry of the beta.home and beta.away corresponds to Rank:Position
@@ -20,8 +20,8 @@ model {
       beta.home[(t-1) * Num.Rank + r] ~ dnorm(eta[r], 1/1000^2)
       beta.away[(t-1) * Num.Rank + r] ~ dnorm(rho[r], 1/1000^2)
     }
-    eta[r] ~ dnorm(0, 1/10000^2)
-    rho[r] ~ dnorm(0, 1/10000^2)
+    eta[r] ~ dnorm(0, 1/100000^2)
+    rho[r] ~ dnorm(0, 1/100000^2)
   }  
   
   sigmasqinv ~ dgamma(0.0001, 0.0001)

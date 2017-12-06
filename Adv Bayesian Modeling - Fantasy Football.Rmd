@@ -150,28 +150,31 @@ d4 = d4[d4$Year>2014,]
 ```{r}
 createRankColumn <- function(data, rank_column) {
   year_week = unique(data[,c('YearWeek')])
+  position = unique(data[,c('Position')])
   result_column = 'result_column'
   data[result_column] = NA
   for (i in 1:length(year_week)) {
-    data_year_week.which = which(data$YearWeek == year_week[i])
-    data_year_week = data[data$YearWeek == year_week[i], ]
-    data_year_week_quantile = quantile(data_year_week[rank_column],
-                                       c(0.25, 0.5, 0.75), na.rm = TRUE)
-    
-    data[data$YearWeek == year_week[i] 
-        & data[rank_column] < data_year_week_quantile[1],
-        result_column] = 'Rank4'
-    data[data$YearWeek == year_week[i]
-        & data[rank_column] >= data_year_week_quantile[1] 
-        & data[rank_column] < data_year_week_quantile[2],
-        result_column] = 'Rank3'
-    data[data$YearWeek == year_week[i]
-        & data[rank_column] >= data_year_week_quantile[2] 
-        & data[rank_column] < data_year_week_quantile[3],
-        result_column] = 'Rank2'
-    data[data$YearWeek == year_week[i] 
-        & data[rank_column] >= data_year_week_quantile[3],
-        result_column] = 'Rank1'  
+    for (j in 1:length(position)) {
+      #data_year_week.which = which(data$YearWeek == year_week[i] & data$Position == position[j] )
+      data_year_week = data[data$YearWeek == year_week[i] & data$Position == position[j], ]
+      data_year_week_quantile = quantile(data_year_week[rank_column],
+                                         c(0.25, 0.5, 0.75), na.rm = TRUE)
+      
+      data[data$YearWeek == year_week[i]& data$Position == position[j]
+          & data[rank_column] < data_year_week_quantile[1],
+          result_column] = 'Rank4'
+      data[data$YearWeek == year_week[i] & data$Position == position[j]
+          & data[rank_column] >= data_year_week_quantile[1] 
+          & data[rank_column] < data_year_week_quantile[2],
+          result_column] = 'Rank3'
+      data[data$YearWeek == year_week[i] & data$Position == position[j]
+          & data[rank_column] >= data_year_week_quantile[2] 
+          & data[rank_column] < data_year_week_quantile[3],
+          result_column] = 'Rank2'
+      data[data$YearWeek == year_week[i] & data$Position == position[j]
+          & data[rank_column] >= data_year_week_quantile[3],
+          result_column] = 'Rank1'  
+    }
   }
   data[result_column]
 }
