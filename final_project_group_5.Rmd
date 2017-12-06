@@ -140,8 +140,8 @@ model {
   # In our model, we pool the beta.home/away based on rank
   for (r in 1:Num.Rank) {
     for (t in 1:Num.Position) {
-      beta.home[(r-1) * Num.Position + t] ~ dnorm(eta[r], 1/1000^2)
-      beta.away[(r-1) * Num.Position + t] ~ dnorm(rho[r], 1/1000^2)
+      beta.home[(t-1) * Num.Rank + r] ~ dnorm(eta[r], 1/1000^2)
+      beta.away[(t-1) * Num.Rank + r] ~ dnorm(rho[r], 1/1000^2)
     }
     eta[r] ~ dnorm(0, 1/10000^2)
     rho[r] ~ dnorm(0, 1/10000^2)
