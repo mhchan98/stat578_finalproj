@@ -193,7 +193,7 @@ All over the place, let's add the team defense
 
 ** Set up train data **
 ```{r}
-fdp_train=fdp[fdp$Year == 2015 & (fdp$Position == "QB" | fdp$Position == "PK"), ]
+fdp_train=fdp[fdp$Year == 2015 & fdp$FanDuelSalary > 6000 & !is.na(fdp$FanDuelSalary), ]
 fdp_train = droplevels(fdp_train)
 
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
