@@ -145,8 +145,8 @@ model {
     }
     eta[r] ~ dnorm(0, 1/100000^2)
     rho[r] ~ dnorm(0, 1/100000^2)
-  }  
-  
+  }
+
   sigmasqinv ~ dgamma(0.0001, 0.0001)
   sigmasq <- 1/sigmasqinv
 }
@@ -155,6 +155,9 @@ model {
 
 ```
 
+```{r}
+library(knitr)
+```
 
 ## Sample Data
 
@@ -192,24 +195,49 @@ All over the place, let's add the team defense
 
 ** Set up train data **
 ```{r}
-fdp_train=fdp[fdp$Year == 2015  & ((fdp$Position == "QB"& fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary))|fdp$Position == "PK"), ]
+#fdp_train=fdp[fdp$Year == 2015, ]
+fdp_train=fdp[fdp$Year == 2016  & ((fdp$Position == "QB"& fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary))|fdp$Position == "PK"), ]
 #fdp_train=fdp[fdp$Year == 2015 & (fdp$Position == "QB" | fdp$Position == "RB") & fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary), ]
-fdp_train = droplevels(fdp_train)
 
+fdp_test =fdp_train[fdp_train$YearWeek >= 201615, ]
+fdp_train=fdp_train[fdp_train$YearWeek < 201615, ]
+fdp_train = droplevels(fdp_train)
+```
+
+```{r}
+Use.Rank = TRUE
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
 Num.Position = length(unique(fdp_train[, "Position"]))
-Num.Rank = length(unique(fdp_train[, "Rank"]))
+if (Use.Rank) {
+  Num.Rank = length(unique(fdp_train[, "Rank"]))
+  Num.HomeAwayInit = Num.Rank
+  Model.File.Ext = ""
+} else {
+  Num.HomeAwayInit = 1
+  Model.File.Ext = ".norank"
+}
+
 
 if (Num.Position == 1) {
   #X.offense = model.matrix(~ 0 + AvgPts5Wks, data=fdp_train)
   X.defense = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_train)
-  X.home = model.matrix(~ 0 + Rank , data=fdp_train)
-  X.away = model.matrix(~ 0 + Rank , data=fdp_train)
+  if (Use.Rank) {
+    X.home = model.matrix(~ 0 + Rank , data=fdp_train)
+    X.away = model.matrix(~ 0 + Rank , data=fdp_train)
+  } else {
+    X.home = rep(1, nrow(fdp_train))
+    X.away = rep(1, nrow(fdp_train))
+  }
 } else {
   #X.offense = model.matrix(~ 0 + AvgPts5Wks:Position, data=fdp_train)
   X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
-  X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-  X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+  if (Use.Rank) {
+    X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+    X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+  } else {
+    X.home = model.matrix(~ 0 + Position , data=fdp_train)
+    X.away = model.matrix(~ 0 + Position , data=fdp_train)
+  }
 }
 
 
@@ -229,20 +257,20 @@ set.seed(20171008)
 # Initialization List for the 4 chains
 jags.inits=list(
   list( sigmasqinv=    0.01,  delta = rep(-100000, Num.Position),
-        eta = c(100000, -100000, 100000, -100000)[1:Num.Rank],
-        rho = c(-100000, 100000, -100000, 100000)[1:Num.Rank],
+        eta = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
   list( sigmasqinv=    0.01,  delta = rep(100000, Num.Position),
-        eta = c(100000, -100000, -100000, 100000)[1:Num.Rank],
-        rho = c(-100000, 100000, 100000, -100000)[1:Num.Rank],
+        eta = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
   list( sigmasqinv=0.000001,  delta = rep(-100000, Num.Position),
-        eta = c(-100000, 100000, -100000, 100000)[1:Num.Rank],
-        rho = c(100000, -100000, 100000, -100000)[1:Num.Rank],
+        eta = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
   list( sigmasqinv=0.000001,  delta = rep(100000, Num.Position),
-        eta = c(-100000, 100000, 100000, -100000)[1:Num.Rank],
-        rho = c(100000, -100000, -100000, 100000)[1:Num.Rank],
+        eta = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
         .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
 )
 
@@ -292,9 +320,9 @@ mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "s
 NSim = 30000
 if (runModel) {
   m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=4, n.adapt = 1000)
-  save(file="fdp.jags.model.Rdata", list="m")
+  save(file=paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""), list="m")
 } else {
-  load("fdp.jags.model.Rdata")
+  load(paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""))
   m$recompile()
 }
 
@@ -310,12 +338,12 @@ if (runSample) {
     (end_time <- Sys.time())
     (result$gelman.R.max)    
   }
-  save(file=paste("fdp.jags.samples.", N.burnin, ".Rdata", sep=""), list="result")
-  save(file=paste("fdp.jags.model.", N.burnin, ".Rdata", sep=""), list="m")
+  save(file=paste("fdp.jags.samples.", N.burnin, Model.File.Ext, ".Rdata", sep=""), list="result")
+  save(file=paste("fdp.jags.model.", N.burnin, Model.File.Ext, ".Rdata", sep=""), list="m")
 } else {
   N.burnin=2500/2 * (2**N.Retry.Loop)
-  load(paste("fdp.jags.samples.", N.burnin, ".Rdata", sep=""))
-  load(paste("fdp.jags.model.", N.burnin, ".Rdata", sep=""))
+  load(paste("fdp.jags.samples.", N.burnin, Model.File.Ext, ".Rdata", sep=""))
+  load(paste("fdp.jags.model.", N.burnin, Model.File.Ext, ".Rdata", sep=""))
   
   gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
 }
@@ -339,5 +367,101 @@ summary(result$coda.sam)
 
 The effective sample sizes of all parameters are greater than 400.
 
+*Probabiliy of players perform better at home than away*
+
+```{r}
+post.samp = as.matrix(result$coda.sam)
+
+beta.home = post.samp[, paste("beta.home[",1:(Num.Rank*Num.Position),"]", sep="")]
+beta.away = post.samp[, paste("beta.away[",1:(Num.Rank*Num.Position),"]", sep="")]
+
+prob.home.away = rep(0, Num.Rank * Num.Position)
+for (r in 1:Num.Rank) {
+  for (p in 1:Num.Position) {
+    idx = (p-1) * Num.Rank + r
+    prob.home.away[idx] = mean(beta.home[, idx] > beta.away[, idx])
+  }
+}
+prob.home.away
+prob.home.away.df = data.frame(colnames(X.home))
+prob.home.away.df$prob.home.bt.away = prob.home.away
+
+colnames(prob.home.away.df) = c("Rank:Position", "Prob.home.bt.away")
+
+kable(prob.home.away.df)
+
+```
+
+**Beta defense**
+
+If a player is facing a team which gives up more points to players on average, we expect the player will score more points.
+```{r}
+
+beta.defense = post.samp[, paste("beta.defense[",1:Num.Position,"]", sep="")]
+
+beta.defense.int.df = data.frame(colnames(X.defense))
+beta.defense.int = matrix(rep(0, Num.Position * 4), nrow=Num.Position, ncol = 4)
+
+int.alpha=0.05
+for (p in 1:Num.Position) {
+  beta.defense.int[p, 1:3] =  quantile(beta.defense[, p], c(int.alpha/2, 0.5, 1-int.alpha/2))
+  beta.defense.int[p, 4] = mean(beta.defense[, p])
+}
+
+beta.defense.int.df$pct025 = beta.defense.int[, 1]
+beta.defense.int.df$pct975 = beta.defense.int[, 3]
+beta.defense.int.df$median = beta.defense.int[, 2]
+beta.defense.int.df$mean = beta.defense.int[, 4]
+colnames(beta.defense.int.df) = c("beta.defense.position", "pct025", "pct975", "median", "mean")
+kable(beta.defense.int.df)
 
 
+```
+
+We observe that the median beta.defense for PK is positive as expected.  But for QB, it is negative, that implies QB actually score less against bad defensive team.  
+
+*DIC*
+```{r}
+(dic.samp = dic.samples(m, NSim))
+
+```
+
+
+
+
+##Alternative Model - no rank
+
+```{r eval=FALSE}
+#sink("fdp.norank.bug")
+#cat("
+model {
+  for (i in 1:length(y)) {
+    y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
+                 + inprod(X.home[i, ], beta.home) 
+                 + inprod(X.away[i, ], beta.away), sigmasqinv)
+  }
+  
+  # The entry of the beta.defense corresponds to Opponent:Position
+  # In our model, we pool the beta.defense based on position. 
+  # i.e. All defense effects of the same position are drawn from the same distribution
+  for (p in 1:Num.Position) {
+    beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
+    delta[p] ~ dnorm(0, 1/100000^2)
+  }
+  
+  # The entry of the beta.home and beta.away corresponds to Position
+  # In our model, we pool the beta.home/away based on Position
+  for (t in 1:Num.Position) {
+    beta.home[t] ~ dnorm(eta, 1/1000^2)
+    beta.away[t] ~ dnorm(rho, 1/1000^2)
+  }
+  eta ~ dnorm(0, 1/100000^2)
+  rho ~ dnorm(0, 1/100000^2)
+
+  sigmasqinv ~ dgamma(0.0001, 0.0001)
+  sigmasq <- 1/sigmasqinv
+}
+#    ",fill = TRUE)
+#sink()
+
+```

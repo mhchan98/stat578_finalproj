@@ -1,0 +1,29 @@
+
+model {
+  for (i in 1:length(y)) {
+    y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
+                 + inprod(X.home[i, ], beta.home) 
+                 + inprod(X.away[i, ], beta.away), sigmasqinv)
+  }
+  
+  # The entry of the beta.defense corresponds to Opponent:Position
+  # In our model, we pool the beta.defense based on position. 
+  # i.e. All defense effects of the same position are drawn from the same distribution
+  for (p in 1:Num.Position) {
+    beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
+    delta[p] ~ dnorm(0, 1/100000^2)
+  }
+  
+  # The entry of the beta.home and beta.away corresponds to Rank:Position
+  # In our model, we pool the beta.home/away based on rank
+  for (t in 1:Num.Position) {
+    beta.home[t] ~ dnorm(eta, 1/1000^2)
+    beta.away[t] ~ dnorm(rho, 1/1000^2)
+  }
+  eta ~ dnorm(0, 1/100000^2)
+  rho ~ dnorm(0, 1/100000^2)
+
+  sigmasqinv ~ dgamma(0.0001, 0.0001)
+  sigmasq <- 1/sigmasqinv
+}
+    

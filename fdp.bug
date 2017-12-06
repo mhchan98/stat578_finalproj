@@ -1,3 +1,4 @@
+
 model {
   for (i in 1:length(y)) {
     y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
@@ -22,8 +23,9 @@ model {
     }
     eta[r] ~ dnorm(0, 1/100000^2)
     rho[r] ~ dnorm(0, 1/100000^2)
-  }  
-  
+  }
+
   sigmasqinv ~ dgamma(0.0001, 0.0001)
   sigmasq <- 1/sigmasqinv
 }
+    
