@@ -9,8 +9,8 @@ model {
   # In our model, we pool the beta.defense based on position. 
   # i.e. All defense effects of the same position are drawn from the same distribution
   for (p in 1:Num.Position) {
-      beta.defense[p] ~ dnorm(delta[p], 1/10000^2)
-    delta[p] ~ dnorm(0, 1/1000^2)
+    beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
+    delta[p] ~ dnorm(0, 1/10000^2)
   }
   
   # The entry of the beta.home and beta.away corresponds to Rank:Position
