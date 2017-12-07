@@ -1,34 +1,26 @@
 ---
 title: "A Bayesian Approach to Predicting NFL Quarterback Scores in Fanduel Tournaments"
 author: 'STAT 578, Fall 2017, **Team 5**: Aaron Ray, Kiomars Nassiri, Michael Chan'
-date: "October 25, 2017"
+date: "December 8, 2017"
 output:
   pdf_document:
   html_document:
     highlight: haddock
     theme: spacelab
 ---
-
 ```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
 options(scipen = 1, digits = 4, width = 80)
 ```
 
-# Project Description
+# Purpose
 
 The National Football League (NFL), being one of the major professional sports leagues in North America, has a wide audience. participates in the NFL craze by competing in fantasy football tournaments organized by the daily fantasy site, "FanDuel.com". Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual footbal team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition. 
 For the purpose of this project we have chosen to work with the data gathered from the **[FanDuel](https://www.fanduel.com/)** internet company. We will leverage a Hierarchical Bayesian approach with the Markov Chain Monte Carlo method to predict the fantasy points likely to be scored by an NFL quarterback in any given game.  The goal is to predict the points scored by each player given certain prior conditions and predictor variables that will assist our model in providing credible posterior prediction intervals.
 
-The analysis is inspired by the study presented in the article, **[Bayesian Hierarchical Modeling Applied to Fantasy Football Projections for Increased Insight and Confidence](http://srome.github.io/Bayesian-Hierarchical-Modeling-Applied-to-Fantasy-Football-Projections-for-Increased-Insight-and-Confidence/)**, by Scott Rome.
 
-# Team Members
 
-- **Aaron Ray** (aaronwr2@illinois.edu)$^*$
-- **Kiomars Nassiri** (nassiri2@illinois.edu)
-- **Michael Chan** (mhchan3@illinois.edu)
 
-$^*$Contact Person
-
-# Dataset Description
+# Data
 
 Team has set up a process to gather the historical data from the [RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0) website. The following is the code used to get the data from RotoGuru:
 
@@ -65,12 +57,34 @@ Data cleaning is performed using R routines. Some data cleaning tasks are needed
 - `HomeGame`: Whether it is home game.
 - `Rank`: The rank of a player based on recent performance
 
-# Analysis
+## Sample Data
 
-## Model
+```{r}
+fdp <- read.csv("fdpfinal.csv", sep = ',', header = TRUE)
+
+head(fdp)
+```
 
 
+```{r}
+fdp['Rank'] = fdp$OffRnk5Wks
+```
 
+
+## Simple LM graph
+
+$y|\alpha \sim N(\alpha,\sigma_y^2 I)$
+
+```{r}
+mod.classic = lm(FanDuelPts ~ AvgPts5Wks, data = fdp)
+
+plot(FanDuelPts ~ AvgPts5Wks, data = fdp)
+```
+
+The data points are all over the place, our model prevented in the next session will present our approach to use the predictors
+
+\newpage
+# Model
 
 At the lowest level, we model the performance (`FanDuelPts`) as normally-distributed around a true value:
 
@@ -157,42 +171,19 @@ model {
 
 ```
 
-```{r}
+```{r echo=FALSE}
 library(knitr)
 ```
 
-## Sample Data
+\newpage
+# Computation
 
-```{r}
-fdp <- read.csv("fdpfinal.csv", sep = ',', header = TRUE)
+We use overdispersed starting points and 4 chains to initalized.  We have seen slow mix in and hence we use thinning of 5 to get a smaller number of data points.  Convergence diagnostics are performed graphically as well as using Gelman Statistics.  We make sure sample size are > 400.  The Morte Carlo error of the $\beta$ are less then 0.06, but the ones of the hyper parameters are much higher at around 5.
 
-head(fdp)
-```
+## Training Data Setup
 
+Due to significant roster change usually happens in the offseason, we believe it is the best to not use data across seasons.  We use 2016 data as it is the most recent year with a full reason. We set aside the last week for verifying prediction effectiveness for the model.
 
-
-```{r}
-fdp['Rank'] = fdp$OffRnk5Wks
-```
-
-### Simple Ideas
-
-
-
-$y|\alpha \sim N(\alpha,\sigma_y^2 I)$
-
-```{r}
-mod.classic = lm(FanDuelPts ~ AvgPts5Wks, data = fdp)
-
-plot(FanDuelPts ~ AvgPts5Wks, data = fdp)
-```
-
-All over the place, let's add the team defense
-
-
-`X.defense` is the indicator matrix
-
-** Set up train data **
 ```{r}
 #fdp_train=fdp[fdp$Year == 2015, ]
 fdp_train=fdp[fdp$Year == 2016  & ((fdp$Position == "QB"& fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary))|fdp$Position == "PK"), ]
@@ -249,11 +240,29 @@ X = cbind(X.defense, X.home, X.away)
 
 ```
 
-```{r warning=FALSE, message=FALSE}
+The following code set up the data used in the model computation.  `X.defense` captures the interaction terms between the defensive power (higher `AvgOppPAP7Wks` means the player is facing a weaker team, since they allows players score more point on them) and position.
+
+**Sample X.defense**
+```{r}
+head(X.defense)
+```
+
+`X.home` and `X.away` are the interaction terms between Position and Rank.  Together `X.home` and `X.away` will always sum to one.  The intercept is implicitly included.
+
+**Sample X.home**
+```{r}
+head(X.home)
+```
+
+
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
 library(rjags)
 set.seed(20171008)
 
 ```
+
+##Initialization
 
 ```{r}
 # Initialization List for the 4 chains
@@ -302,11 +311,11 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col, n.thin=1) {
   }
   
   gelman.R = gelman.diag(x, autoburnin=FALSE, multivariate = FALSE)
-  print(gelman.R)
-  
+
   result <- list(
     coda.sam = x, 
-    gelman.R.max=max(gelman.R$psrf[, 1])
+    gelman.R.max=max(gelman.R$psrf[, 1]),
+    gelman.R = gelman.R
   )
   
   return(result)
@@ -315,8 +324,8 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col, n.thin=1) {
 ```
 
 ```{r warning=FALSE}
-runModel=FALSE
-runSample=FALSE
+runModel=TRUE
+runSample=TRUE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -353,29 +362,46 @@ if (runSample) {
   load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
   load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
   m$recompile()
-  gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
 }
 ```
+
+##Convergence diagnostics
+
+###Trace Plots
+
+The trace plots of all parameters show good distribution convergence.
 
 ```{r fig.width=10,fig.height=11}
 plot(result$coda.sam, smooth=FALSE)
 ```
 
+###Gelman Statistics
+
+```{r}
+result$gelman.R
+```
+
 Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
 
+###MCMC Summary
 ```{r}
 (m.summary = summary(result$coda.sam))
 ```
 
 
-*Effective Sample Size*
+###Effective Sample Size
 ```{r}
 (eff.size = effectiveSize(result$coda.sam[, ]))
 ```
 
 The effective sample sizes of all parameters are greater than 400.
 
-*Probabiliy of players perform better at home than away*
+\newpage
+#Model Assessment
+
+##General posterior model assumption check
+
+*Probabiliy of players should perform better at home than away*
 
 ```{r}
 post.samp = as.matrix(result$coda.sam)
@@ -400,7 +426,9 @@ kable(prob.home.away.df)
 
 ```
 
-**Beta defense**
+The above table shows that players perform better at home than away as expected.
+
+*Beta defense*
 
 If a player is facing a team which gives up more points to players on average, we expect the player will score more points.
 ```{r}
@@ -439,8 +467,9 @@ We observe that the median beta.defense for PK is positive as expected.  But for
 
 The effective number of parameters("penalty") is 19, and the Plummer's DIC ("Penalized deviance") is 4719.  Not that we have `r ncol(post.samp)` parameters in our model, `r ncol(post.samp) -19` of them were shrunk away.
 
-### Model Checking ###
+## Posterior Predictive Check
 
+### Error correlation Check
 A posterior predictive p-value usng the following test quantity
 
 $$
@@ -511,6 +540,7 @@ The posterior predictive p-value:
 
 The p.value is `r p.value`, > 0.05, which does not indicate any evidence of problem.
 
+### Chi-square Discrepancy Check
 
 ```{r}
 
@@ -534,6 +564,8 @@ abline(a=0,b=1)
 
 The posterior predictive p-value using the chi-square discrepancy is `p.value.Tchi`=`r p.value.Tchi`.  The p-value is > 0.05.  Hence, it does not indicate any evidence of problems.
 
+### Individual Data Point Discrepancy Check
+
 **Using $Pr(y^{rep} \geq y | y)$ as posterior predictive p-value**
 ```{r}
 yreps.minus.y <- matrix(NA, NTotalSim, nrow(fdp_train))
@@ -547,7 +579,9 @@ for(s in 1:NTotalSim) {
 The posterior predictive p-value using individual data point is `p.value.y.rep.all` = `r p.value.y.rep.all`, which is > 0.05.  This shows no evidence of problem.
 
 
-##Prediction##
+## Prediction
+
+WE use the last week of data to check the prediction effectiveness of the model
 
 ```{r}
 if (Num.Position == 1) {
@@ -636,8 +670,7 @@ for (s in 1:1) {
 
 ```
 
-
-
+\newpage
 ##Alternative Model - no rank
 
 ```{r eval=FALSE}
@@ -756,8 +789,8 @@ data.jags <- list(
 ```
 
 ```{r warning=FALSE}
-runModel=FALSE
-runSample=FALSE
+runModel=TRUE
+runSample=TRUE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -824,8 +857,8 @@ The effective sample sizes of all parameters are greater than 400.
 
 The effective number of parameters("penalty") is 7.02, and the Plummer's DIC ("Penalized deviance") is 4781.  This model has a higher DIC compared with the original one with rank(4719).  Hence, we conclude that the original model (with rank) is better for prediction.
 
-
-##Conclusion
+\newpage
+# Results
 
 The model has decent prediction ability.  It should be noted that we only picked two positions to predict due to computation resource constraint.  In the pursue of creating this model, we have multiple route:
 
@@ -834,3 +867,16 @@ The model has decent prediction ability.  It should be noted that we only picked
 
 
 
+# Contributions
+
+- **Aaron Ray** (aaronwr2@illinois.edu)
+- **Kiomars Nassiri** (nassiri2@illinois.edu)
+- **Michael Chan** (mhchan3@illinois.edu)
+
+# Reference
+
+The analysis is inspired by the study presented in the article, **[Bayesian Hierarchical Modeling Applied to Fantasy Football Projections for Increased Insight and Confidence](http://srome.github.io/Bayesian-Hierarchical-Modeling-Applied-to-Fantasy-Football-Projections-for-Increased-Insight-and-Confidence/)**, by Scott Rome.
+
+# Appendices
+
+- Add data cleaning code here
