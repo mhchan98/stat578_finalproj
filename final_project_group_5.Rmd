@@ -199,6 +199,7 @@ fdp_train=fdp[fdp$Year == 2016  & ((fdp$Position == "QB"& fdp$FanDuelSalary > 65
 #fdp_train=fdp[fdp$Year == 2015 & (fdp$Position == "QB" | fdp$Position == "RB") & fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary), ]
 
 fdp_test =fdp_train[fdp_train$YearWeek >= 201615, ]
+fdp_test = droplevels(fdp_test)
 fdp_train=fdp_train[fdp_train$YearWeek < 201615, ]
 fdp_train = droplevels(fdp_train)
 ```
@@ -546,6 +547,96 @@ for(s in 1:NTotalSim) {
 The posterior predictive p-value using individual data point is `p.value.y.rep.all` = `r p.value.y.rep.all`, which is > 0.05.  This shows no evidence of problem.
 
 
+##Prediction##
+
+```{r}
+if (Num.Position == 1) {
+  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
+  X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_test)
+  if (Use.Rank) {
+    X.home.test = model.matrix(~ 0 + Rank , data=fdp_test)
+    X.away.test = model.matrix(~ 0 + Rank , data=fdp_test)
+  } else {
+    X.home.test = rep(1, nrow(fdp_test))
+    X.away.test = rep(1, nrow(fdp_test))
+  }
+} else {
+  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
+  X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_test)
+  if (Use.Rank) {
+    X.home.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
+    X.away.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
+  } else {
+    X.home.test = model.matrix(~ 0 + Position , data=fdp_test)
+    X.away.test = model.matrix(~ 0 + Position , data=fdp_test)
+  }
+}
+
+
+X.home.test = X.home.test * fdp_test$HomeGame
+X.away.test = X.away.test * (1- fdp_test$HomeGame)
+X.test = cbind(X.defense.test, X.home.test, X.away.test)
+```
+
+```{r}
+y_hat.test <- matrix(NA, NTotalSim, nrow(fdp_test))
+for(s in 1:NTotalSim) {
+  y_hat.test[s, ] =  fdp_test$AvgPts5Wks + (X.defense.test %*% beta.defense[s, ]) + (X.home.test %*% beta.home[s, ]) + (X.away.test %*% beta.away[s, ])
+}
+
+y.pred <- matrix(NA, NTotalSim, nrow(fdp_test))
+for(s in 1:NTotalSim) {
+  y.pred[s, ] <- rnorm(nrow(fdp_test), y_hat.test[s, ], post.sigma.sim[s])
+}
+
+```
+
+*Prediction of indvidual data point*
+
+Let's pick one example data point, `fdp_test[1,]`
+
+```{r}
+(fdp_test[1,])
+```
+
+The real FanDuelPts is `r fdp_test$FanDuelPts[1]`
+
+The prediction value has the following 95% interval
+
+```{r}
+quantile(y.pred[, 1], c(0.025, 0.975))
+```
+
+which does contain the actual data value of `r fdp_test$FanDuelPts[1]`
+
+
+Let's look at $Pr(y_{pred} >= y)$
+
+```{r}
+y.pred.minus.y <- matrix(NA, NTotalSim, nrow(fdp_test))
+for(s in 1:NTotalSim) {
+  y.pred.minus.y[s, ] <- y.pred[s, ] - fdp_test$FanDuelPts
+}
+
+(p.value.y.pred.all = mean(y.pred.minus.y > 0))
+```
+
+The probability of $y_{pred} >= y$ is `r p.value.y.pred.all`, close to 0.5, which implies a relatively good predictive value.  
+
+*A look at a cross section of how one simulation of a prediction of the whole test set*
+
+```{r}
+for (s in 1:1) {
+  plot(fdp_test$FanDuelPts, y.pred[s, ], pch=".", cex=2,
+  xlim=c(min(y.pred[s, ], fdp_test$FanDuelPts), max(y.pred[s, ], fdp_test$FanDuelPts)),
+  ylim=c(min(y.pred[s, ], fdp_test$FanDuelPts), max(y.pred[s, ], fdp_test$FanDuelPts)),
+  xlab="y", ylab="y pred")
+  abline(a=0,b=1)
+}
+
+```
+
+
 
 ##Alternative Model - no rank
 
@@ -569,6 +660,7 @@ model {
   
   # The entry of the beta.home and beta.away corresponds to Position
   # In our model, we pool the beta.home/away based on Position
+  # NO RANK
   for (t in 1:Num.Position) {
     beta.home[t] ~ dnorm(eta, 1/1000^2)
     beta.away[t] ~ dnorm(rho, 1/1000^2)
@@ -583,3 +675,162 @@ model {
 #sink()
 
 ```
+
+```{r}
+Use.Rank = FALSE
+Num.Opponent = length(unique(fdp_train[, "Opponent"]))
+Num.Position = length(unique(fdp_train[, "Position"]))
+#Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
+Num.fixed.pred=1 #AvgOppPAP7Wks
+if (Use.Rank) {
+  Num.Rank = length(unique(fdp_train[, "Rank"]))
+  Num.HomeAwayInit = Num.Rank
+  Model.File.Ext = ""
+} else {
+  Num.HomeAwayInit = 1
+  Model.File.Ext = ".norank"
+}
+
+
+if (Num.Position == 1) {
+  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
+  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_train)
+  if (Use.Rank) {
+    X.home = model.matrix(~ 0 + Rank , data=fdp_train)
+    X.away = model.matrix(~ 0 + Rank , data=fdp_train)
+  } else {
+    X.home = rep(1, nrow(fdp_train))
+    X.away = rep(1, nrow(fdp_train))
+  }
+} else {
+  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
+  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
+  if (Use.Rank) {
+    X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+    X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+  } else {
+    X.home = model.matrix(~ 0 + Position , data=fdp_train)
+    X.away = model.matrix(~ 0 + Position , data=fdp_train)
+  }
+}
+
+
+X.home = X.home * fdp_train$HomeGame
+X.away = X.away * (1- fdp_train$HomeGame)
+X = cbind(X.defense, X.home, X.away)
+
+```
+
+```{r}
+# Initialization List for the 4 chains
+jags.inits=list(
+  list( sigmasqinv=    0.01,  delta = rep(-100000, Num.Position * Num.fixed.pred),
+        eta = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
+  list( sigmasqinv=    0.01,  delta = rep(100000, Num.Position * Num.fixed.pred),
+        eta = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
+  list( sigmasqinv=0.000001,  delta = rep(-100000, Num.Position * Num.fixed.pred),
+        eta = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
+  list( sigmasqinv=0.000001,  delta = rep(100000, Num.Position * Num.fixed.pred),
+        eta = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
+)
+
+data.jags <- list(
+  y= fdp_train$FanDuelPts,
+  alpha = fdp_train$AvgPts5Wks,
+  X.defense = X.defense,
+  X.home = X.home,
+  X.away = X.away,
+  Num.fixed.pred=Num.fixed.pred,
+  Num.Position=Num.Position
+  #Num.Opponent=Num.Opponent,
+  #Num.Rank=Num.Rank
+)
+```
+
+```{r warning=FALSE}
+runModel=TRUE
+runSample=TRUE
+
+mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
+
+NSim = 30000
+NChain = 4
+NThin = 5
+NTotalSim = NSim * NChain / 5
+if (runModel) {
+  if(Use.Rank) {
+    bug.file = "fdp.bug"
+  } else {
+    bug.file = "fdp.norank.bug"
+  }
+  m <- jags.model(bug.file, data.jags, inits = jags.inits, n.chains=NChain, n.adapt = 1000)
+  save(file=paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""), list="m")
+} else {
+  load(paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""))
+  m$recompile()
+}
+
+load.module("dic")
+
+N.Retry.Loop = 1
+if (runSample) {
+  N.burnin=2500/2
+  for (loopIdx in 1:N.Retry.Loop) {
+    (start_time <- Sys.time())
+    (N.burnin = N.burnin * 2)
+    result = burnAndSample(m, N.burnin, NSim, show.plot=FALSE, mon.col = mon.col, n.thin=NChain)
+    (end_time <- Sys.time())
+    (result$gelman.R.max)    
+  }
+  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
+  save(file=paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""), list="result")
+  save(file=paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""), list="m")
+} else {
+  N.burnin=2500/2 * (2**N.Retry.Loop)
+  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
+  load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
+  load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
+  
+  gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
+}
+```
+
+Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
+
+```{r}
+(m.summary = summary(result$coda.sam))
+```
+
+
+*Effective Sample Size*
+```{r}
+(eff.size = effectiveSize(result$coda.sam[, ]))
+```
+The effective sample sizes of all parameters are greater than 400.
+
+*DIC*
+```{r}
+(dic.samp = dic.samples(m, NTotalSim))
+
+```
+
+The effective number of parameters("penalty") is 7.02, and the Plummer's DIC ("Penalized deviance") is 4781.  This model has a higher DIC compared with the original one with rank(4719).  Hence, we conclude that the original model (with rank) is better for prediction.
+
+
+##Conclusion
+
+While the model has some issue with error correlation, it has decent prediction ability.  It should be noted that we only picked two positions to predict due to computation resource constraint.  In the pursue of creating this model, we have multiple route:
+
+1) We have tried to include all positions.  However, the model took 5 hours to finish the MCMC simulation.  Therefore, we elected to include a smaller subset.
+2) We have tried to include FanDuelSalary as a predictor.  However, that does not improve the model, and added sufficient time to compute - About 30 minutes to compute.  
+
+
+

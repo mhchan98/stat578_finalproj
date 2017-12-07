@@ -14,8 +14,9 @@ model {
     delta[p] ~ dnorm(0, 1/100000^2)
   }
   
-  # The entry of the beta.home and beta.away corresponds to Rank:Position
-  # In our model, we pool the beta.home/away based on rank
+  # The entry of the beta.home and beta.away corresponds to Position
+  # In our model, we pool the beta.home/away based on Position
+  # NO RANK
   for (t in 1:Num.Position) {
     beta.home[t] ~ dnorm(eta, 1/1000^2)
     beta.away[t] ~ dnorm(rho, 1/1000^2)
