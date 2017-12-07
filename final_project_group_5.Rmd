@@ -65,7 +65,7 @@ Data cleaning is performed using R routines. Some data cleaning tasks are needed
 - `HomeGame`: Whether it is home game.
 - `Rank`: The rank of a player based on recent performance
 
-# Analysis Ideas
+# Analysis
 
 ## Model
 
@@ -315,8 +315,8 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col, n.thin=1) {
 ```
 
 ```{r warning=FALSE}
-runModel=TRUE
-runSample=TRUE
+runModel=FALSE
+runSample=FALSE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -352,7 +352,7 @@ if (runSample) {
   run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
   load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
   load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
-  
+  m$recompile()
   gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
 }
 ```
@@ -441,7 +441,7 @@ The effective number of parameters("penalty") is 19, and the Plummer's DIC ("Pen
 
 ### Model Checking ###
 
-A posterior predictive p-value based on the no-intercept model. Consider test quantity
+A posterior predictive p-value usng the following test quantity
 
 $$
 \begin{aligned}
@@ -449,7 +449,7 @@ T(y, X, \theta ) & = |\hat{cor}(\epsilon, \text{time})|  \\
 \end{aligned}
 $$
 
-where $\hat{cor}(\epsilon, \text{time})$ is sample correlation between the error vector $\epsilon$ and the year week in the data. The larger this quantity is for the model, the less well it fits the data (since, if a regression model actually fits, the errors should ideally be uncorrelated with the predictor).
+where $\hat{cor}(\epsilon, \text{time})$ is sample correlation between the error vector $\epsilon$ and the year week in the data. The larger this quantity is for the model, the less well it fits the data as that would mean the error is correlated with time.
 
 *The simulated error vectors $\epsilon$ (as rows of a matrix):*
 ```{r}
@@ -484,13 +484,13 @@ for(s in 1:NTotalSim) {
 
 *The simulated values of $T(y, X, \theta )$*
 ```{r}
-T.sim = abs(cor(t(error.sim), fdp_train$FanDuelPts))
+T.sim = abs(cor(t(error.sim), fdp_train$YearWeek))
 head(T.sim)
 ```
 
 *The simulated values of $T(y^{rep}, X, \theta )$*
 ```{r}
-T.rep.sim = abs(cor(t(error.rep), fdp_train$FanDuelPts))
+T.rep.sim = abs(cor(t(error.rep), fdp_train$YearWeek))
 head(T.rep.sim)
 ```
 
@@ -509,7 +509,7 @@ The posterior predictive p-value:
 (p.value = mean(T.rep.sim >= T.sim))
 ```
 
-The p.value is `r p.value`.  This indicates the error actually has correlation with the response.
+The p.value is `r p.value`, > 0.05, which does not indicate any evidence of problem.
 
 
 ```{r}
@@ -756,8 +756,8 @@ data.jags <- list(
 ```
 
 ```{r warning=FALSE}
-runModel=TRUE
-runSample=TRUE
+runModel=FALSE
+runSample=FALSE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -798,7 +798,7 @@ if (runSample) {
   run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
   load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
   load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
-  
+  m$recompile()
   gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
 }
 ```
@@ -827,7 +827,7 @@ The effective number of parameters("penalty") is 7.02, and the Plummer's DIC ("P
 
 ##Conclusion
 
-While the model has some issue with error correlation, it has decent prediction ability.  It should be noted that we only picked two positions to predict due to computation resource constraint.  In the pursue of creating this model, we have multiple route:
+The model has decent prediction ability.  It should be noted that we only picked two positions to predict due to computation resource constraint.  In the pursue of creating this model, we have multiple route:
 
 1) We have tried to include all positions.  However, the model took 5 hours to finish the MCMC simulation.  Therefore, we elected to include a smaller subset.
 2) We have tried to include FanDuelSalary as a predictor.  However, that does not improve the model, and added sufficient time to compute - About 30 minutes to compute.  
