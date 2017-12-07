@@ -173,9 +173,6 @@ head(fdp)
 
 ```{r}
 fdp['Rank'] = fdp$OffRnk5Wks
-fdp['Locality'] = 'Away'
-fdp[fdp$HomeGame == 1, 'Locality'] = 'Home'
-
 ```
 
 ### Simple Ideas
@@ -210,7 +207,8 @@ fdp_train = droplevels(fdp_train)
 Use.Rank = TRUE
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
 Num.Position = length(unique(fdp_train[, "Position"]))
-Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
+#Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
+Num.fixed.pred=1 #AvgOppPAP7Wks
 if (Use.Rank) {
   Num.Rank = length(unique(fdp_train[, "Rank"]))
   Num.HomeAwayInit = Num.Rank
@@ -222,8 +220,8 @@ if (Use.Rank) {
 
 
 if (Num.Position == 1) {
-  #X.offense = model.matrix(~ 0 + AvgPts5Wks, data=fdp_train)
-  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
+  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
+  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_train)
   if (Use.Rank) {
     X.home = model.matrix(~ 0 + Rank , data=fdp_train)
     X.away = model.matrix(~ 0 + Rank , data=fdp_train)
@@ -232,8 +230,8 @@ if (Num.Position == 1) {
     X.away = rep(1, nrow(fdp_train))
   }
 } else {
-  #X.offense = model.matrix(~ 0 + AvgPts5Wks:Position, data=fdp_train)
-  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
+  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
+  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
   if (Use.Rank) {
     X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
     X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
@@ -321,7 +319,7 @@ runSample=TRUE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
-NSim = 50000
+NSim = 30000
 NChain = 4
 NThin = 5
 NTotalSim = NSim * NChain / 5
@@ -365,7 +363,7 @@ plot(result$coda.sam, smooth=FALSE)
 Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
 
 ```{r}
-summary(result$coda.sam)
+(m.summary = summary(result$coda.sam))
 ```
 
 
@@ -468,13 +466,11 @@ for(s in 1:NTotalSim) {
 ```{r}
 
 post.sigma.2.sim <- post.samp[,"sigmasq"]
+post.sigma.sim <- sqrt(post.sigma.2.sim)
 
 yreps <- matrix(NA, NTotalSim, nrow(fdp_train))
 for(s in 1:NTotalSim) {
-  post.sigma = sqrt(post.sigma.2.sim[s])
-  for (i in 1:nrow(fdp_train)) {
-    yreps[s,i] <- rnorm(1, y_hat.sim[s, ], post.sigma)
-  }
+  yreps[s, ] <- rnorm(nrow(fdp_train), y_hat.sim[s, ], post.sigma.sim[s])
 }
 
 error.rep <- matrix(NA, NTotalSim, nrow(fdp_train))
@@ -513,6 +509,43 @@ The posterior predictive p-value:
 ```
 
 The p.value is `r p.value`.  This indicates the error actually has correlation with the response.
+
+
+```{r}
+
+
+Tchi <- numeric(NTotalSim)
+Tchirep <- numeric(NTotalSim)
+for(s in 1:NTotalSim){
+  Tchi[s] <- sum((fdp_train$FanDuelPts - y_hat.sim[s,])^2 / post.sigma.sim[s])
+  Tchirep[s] <- sum((yreps[s,] - y_hat.sim[s,])^2 / post.sigma.sim[s])
+}
+(p.value.Tchi = mean(Tchirep >= Tchi))
+```
+
+```{r}
+plot(Tchi, Tchirep, pch=".", cex=2,
+  xlim=c(min(Tchi, Tchirep), max(Tchi, Tchirep)),
+  ylim=c(min(Tchi, Tchirep), max(Tchi, Tchirep)),
+  xlab="Tchi", ylab="Tchirep")
+abline(a=0,b=1)
+```
+
+The posterior predictive p-value using the chi-square discrepancy is `p.value.Tchi`=`r p.value.Tchi`.  The p-value is > 0.05.  Hence, it does not indicate any evidence of problems.
+
+**Using $Pr(y^{rep} \geq y | y)$ as posterior predictive p-value**
+```{r}
+yreps.minus.y <- matrix(NA, NTotalSim, nrow(fdp_train))
+for(s in 1:NTotalSim) {
+  yreps.minus.y[s, ] <- yreps[s, ] - fdp_train$FanDuelPts
+}
+
+(p.value.y.rep.all = mean(yreps.minus.y > 0))
+```
+
+The posterior predictive p-value using individual data point is `p.value.y.rep.all` = `r p.value.y.rep.all`, which is > 0.05.  This shows no evidence of problem.
+
+
 
 ##Alternative Model - no rank
 
