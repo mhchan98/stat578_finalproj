@@ -16,7 +16,7 @@ options(scipen = 1, digits = 4, width = 80)
 
 The National Football League, NFL, is a professional American football league consisting of 32 teams. It is the most professional American football league in the world and is one of the most followed sports leagues in North America. Being a football fan, however, does not end with following matches on TV or stadiums or buying your favorite team's jersey. Over the years, football fans have come up with interesting NFL-themed side-activities, the most popular of which is called "Fantasy Football".
 
-Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual football team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition.Each team is allowed a pre-determined number of players on its roster, as well as a specified number at each position that can or must be used in each game (the "starters").
+Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual football team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition. Each team is allowed a pre-determined number of players on its roster, as well as a specified number at each position that can or must be used in each game (the "starters").
 
 For the purpose of this project, we have chosen to work with the data gathered from the **[FanDuel](https://www.fanduel.com/)** internet company. FanDuel is a web-based fantasy sports game and with 6 million registered users and is the second largest daily fantasy sports company (as measured by entry fees and user base) in the daily fantasy sports industry.
 
@@ -194,7 +194,7 @@ library(knitr)
 \newpage
 # Computation
 
-We use overdispersed starting points and 4 chains to initialized. We have seen slow mix in and hence we use thinning of 5 to get a smaller number of data points.  Convergence diagnostics are performed graphically as well as using Gelman Statistics.  We make sure sample size are > 400.  The Monte Carlo error of the $\beta$ are less then 0.06, but the ones of the hyper parameters are much higher at around 5.
+We use overdispersed starting points and 4 chains to initialized. We have seen slow mix in and hence we use thinning of 5 to get a smaller number of data points.  Convergence diagnostics are performed graphically as well as using Gelman Statistics.  We make sure sample size are > 400.  The Monte Carlo error of the $\beta$ are less than 0.06, but the ones of the hyper parameters are much higher at around 5.
 
 ## Training Data Setup
 
@@ -557,6 +557,8 @@ The posterior predictive p-value:
 The p.value is `r p.value`, > 0.05, which does not indicate any evidence of problem.
 
 ### Chi-square Discrepancy Check
+
+Chi-square discrepancy check is used to check for general model issues like mis-specified means, mis-specified variances, and over-concentrated prior.
 
 ```{r}
 
