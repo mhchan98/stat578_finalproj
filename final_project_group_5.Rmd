@@ -16,18 +16,18 @@ options(scipen = 1, digits = 4, width = 80)
 
 The National Football League, NFL, is a professional American football league consisting of 32 teams. It is the most professional American football league in the world and is one of the most followed sports leagues in North America. Being a football fan, however, does not end with following matches on TV or stadiums or buying your favorite team's jersey. Over the years, football fans have come up with interesting NFL-themed side-activities, the most popular of which is called "Fantasy Football".
 
-Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual footbal team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition.Each team is allowed a pre-determined number of players on its roster, as well as a specified number at each position that can or must be used in each game (the "starters").
+Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual football team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition.Each team is allowed a pre-determined number of players on its roster, as well as a specified number at each position that can or must be used in each game (the "starters").
 
 For the purpose of this project, we have chosen to work with the data gathered from the **[FanDuel](https://www.fanduel.com/)** internet company. FanDuel is a web-based fantasy sports game and with 6 million registered users and is the second largest daily fantasy sports company (as measured by entry fees and user base) in the daily fantasy sports industry.
 
 We will leverage a Hierarchical Bayesian approach with the Markov Chain Monte Carlo method to predict the Fantasy points likely to be scored by an NFL quarterback in any given game.  The goal is to predict the points scored by each player given certain prior conditions and predictor variables that will assist our model in providing credible posterior prediction intervals. The following are the research questions that will be answered in this project:
 
-- **Interpretation**: What features can help us effectively predict Fanduel points players receive in a future match?
+- **Interpretation**: What features can help us effectively predict FanDuel points players receive in a future match?
 - **Prediction**: How reliable are the predictions for the future performance of players?
 
 # Data
 
-Historical data on the performance of the players is extracted from the **[RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0)** website. Data scraped from RotoGuru includes information about the Fanduel points received by each player, player's position, player's opponent team, Home/Away match indication, etc. for each week.
+Historical data on the performance of the players is extracted from the **[RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0)** website. Data scraped from RotoGuru includes information about the FanDuel points received by each player, player's position, player's opponent team, Home/Away match indication, etc. for each week.
 
 The following is the code used to get the data from RotoGuru:
 
@@ -192,11 +192,11 @@ library(knitr)
 \newpage
 # Computation
 
-We use overdispersed starting points and 4 chains to initalized.  We have seen slow mix in and hence we use thinning of 5 to get a smaller number of data points.  Convergence diagnostics are performed graphically as well as using Gelman Statistics.  We make sure sample size are > 400.  The Morte Carlo error of the $\beta$ are less then 0.06, but the ones of the hyper parameters are much higher at around 5.
+We use overdispersed starting points and 4 chains to initialized. We have seen slow mix in and hence we use thinning of 5 to get a smaller number of data points.  Convergence diagnostics are performed graphically as well as using Gelman Statistics.  We make sure sample size are > 400.  The Monte Carlo error of the $\beta$ are less then 0.06, but the ones of the hyper parameters are much higher at around 5.
 
 ## Training Data Setup
 
-Due to significant roster change usually happens in the offseason, we believe it is the best to not use data across seasons.  We use 2016 data as it is the most recent year with a full reason. We set aside the last week for verifying prediction effectiveness for the model.
+Due to significant roster change usually happens in the off-season, we believe it is the best to not use data across seasons.  We use 2016 data as it is the most recent year with a full season. We set aside the last week for verifying prediction accuracy of the model.
 
 ```{r}
 #fdp_train=fdp[fdp$Year == 2015, ]
@@ -484,7 +484,7 @@ The effective number of parameters("penalty") is 19, and the Plummer's DIC ("Pen
 ## Posterior Predictive Check
 
 ### Error correlation Check
-A posterior predictive p-value usng the following test quantity
+A posterior predictive p-value using the following test quantity
 
 $$
 \begin{aligned}
