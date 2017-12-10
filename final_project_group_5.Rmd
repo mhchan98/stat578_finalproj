@@ -1,5 +1,5 @@
 ---
-title: "A Bayesian Approach to Predicting NFL Quarterback Scores in Fanduel Tournaments"
+title: "A Bayesian Approach to Predicting NFL Player Scores in Fanduel Tournaments"
 author: 'STAT 578, Fall 2017, **Team 5**: Aaron Ray, Kiomars Nassiri, Michael Chan'
 date: "December 8, 2017"
 output:
@@ -138,6 +138,8 @@ $\eta \sim N(0, 10000^2)$
 
 $\rho \sim N(0, 10000^2)$
 
+Note that in this project, we model the performance (`FanDuelPts`) as normally-distributed around a true value.  Alternatively, we could have use Poisson distribution instead to avoid predicting the `FanDuelPts` less than zero.  However, for the purpose of predicting player's `FanDuelPts`, we mainly only need the relative strength of players and the normal assumption produces good enough model.  The portion of predicted `FanDuelPts` should be relatively small.
+
 \newpage
 Here is the DAG model:
 
@@ -185,7 +187,7 @@ model {
 
 ```
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
 ```
 
@@ -592,10 +594,21 @@ for(s in 1:NTotalSim) {
 
 The posterior predictive p-value using individual data point is `p.value.y.rep.all` = `r p.value.y.rep.all`, which is > 0.05.  This shows no evidence of problem.
 
+### Non Negative Check
+
+As discussed in the model section, we use normal distribution, instead of poisson distribution, to simplify the model.  Here we'll check the portion of predicted value < 0.
+
+```{r}
+perct.lt.zero = mean(yreps < 0)
+```
+
+The percentage of predicted values that are less than zero is `perct.lt.zero` = `r perct.lt.zero`, which is relatively small.  This justify the decision to use normal to simplify our model.
+
+
 
 ## Prediction
 
-WE use the last week of data to check the prediction effectiveness of the model
+We use the last week of data to check the prediction effectiveness of the model.  This is essentially a cross validation analysis.
 
 ```{r}
 if (Num.Position == 1) {
@@ -639,9 +652,9 @@ for(s in 1:NTotalSim) {
 
 ```
 
-*Prediction of indvidual data point*
+### Prediction of Indvidual Player Performance
 
-Let's pick one example data point, `fdp_test[1,]`
+A measure of the effectiveness of this model is to predict individual player performance.  Consider an example data point, `fdp_test[1,]`
 
 ```{r}
 (fdp_test[1,])
@@ -649,7 +662,7 @@ Let's pick one example data point, `fdp_test[1,]`
 
 The real FanDuelPts is `r fdp_test$FanDuelPts[1]`
 
-The prediction value has the following 95% interval
+The predicted value has the following 95% interval
 
 ```{r}
 quantile(y.pred[, 1], c(0.025, 0.975))
@@ -657,8 +670,16 @@ quantile(y.pred[, 1], c(0.025, 0.975))
 
 which does contain the actual data value of `r fdp_test$FanDuelPts[1]`
 
+Here is the density plot of the posterior density
 
-Let's look at $Pr(y_{pred} >= y)$
+```{r}
+library(lattice)
+densityplot(y.pred[, 1])
+```
+
+### Overall Prediction Effectiveness
+
+To measure the overall prediction effectiveness, we can look at $Pr(y_{pred} >= y)$ as a posterior p-value.
 
 ```{r}
 y.pred.minus.y <- matrix(NA, NTotalSim, nrow(fdp_test))
@@ -883,9 +904,11 @@ The model has decent prediction ability.  It should be noted that we only picked
 
 # Contributions
 
-- **Aaron Ray** (aaronwr2@illinois.edu)
-- **Kiomars Nassiri** (nassiri2@illinois.edu)
-- **Michael Chan** (mhchan3@illinois.edu)
+All three members contribute roughly the same amount of works.  While each member owns certain pieces of the project, all members contribute idea, and review all parts of the project.  The following list summarizes the main contribution of individual member:
+
+- **Aaron Ray** (aaronwr2@illinois.edu) - Came up with the project idea, the primary goals, data discovery and attribution.
+- **Kiomars Nassiri** (nassiri2@illinois.edu) - Presentation and various documentation.
+- **Michael Chan** (mhchan3@illinois.edu) - Finalize data cleansing, drive the design, implementation, and the analysis of the model.
 
 # Reference
 
