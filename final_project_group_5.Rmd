@@ -596,7 +596,7 @@ The posterior predictive p-value using individual data point is `p.value.y.rep.a
 
 ### Non Negative Check
 
-As discussed in the model section, we use normal distribution, instead of poisson distribution, to simplify the model.  Here we'll check the portion of predicted value < 0.
+As discussed in the model section, we use normal distribution, instead of Poisson distribution, to simplify the model.  Here we'll check the portion of predicted value < 0.
 
 ```{r}
 perct.lt.zero = mean(yreps < 0)
@@ -652,7 +652,7 @@ for(s in 1:NTotalSim) {
 
 ```
 
-### Prediction of Indvidual Player Performance
+### Prediction of Individual Player Performance
 
 A measure of the effectiveness of this model is to predict individual player performance.  Consider an example data point, `fdp_test[1,]`
 
