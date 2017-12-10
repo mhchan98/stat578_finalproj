@@ -18,16 +18,21 @@ The National Football League, NFL, is a professional American football league co
 
 Participants in a **[Fantasy Football](https://en.wikipedia.org/wiki/Fantasy_football_(American))** game act as the managers of a virtual footbal team and try to maximize their points by picking up the best line-up. Points are given based on actual performance of players in real-world competition.Each team is allowed a pre-determined number of players on its roster, as well as a specified number at each position that can or must be used in each game (the "starters").
 
-For the purpose of this project, we have chosen to work with the data gathered from the **[FanDuel](https://www.fanduel.com/)** internet company. We will leverage a Hierarchical Bayesian approach with the Markov Chain Monte Carlo method to predict the Fantasy points likely to be scored by an NFL quarterback in any given game.  The goal is to predict the points scored by each player given certain prior conditions and predictor variables that will assist our model in providing credible posterior prediction intervals. The following are the research questions that will be answered in this project:
+For the purpose of this project, we have chosen to work with the data gathered from the **[FanDuel](https://www.fanduel.com/)** internet company. FanDuel is a web-based fantasy sports game and with 6 million registered users and is the second largest daily fantasy sports company (as measured by entry fees and user base) in the daily fantasy sports industry.
+
+We will leverage a Hierarchical Bayesian approach with the Markov Chain Monte Carlo method to predict the Fantasy points likely to be scored by an NFL quarterback in any given game.  The goal is to predict the points scored by each player given certain prior conditions and predictor variables that will assist our model in providing credible posterior prediction intervals. The following are the research questions that will be answered in this project:
 
 - **Interpretation**: What features can help us effectively predict Fanduel points players receive in a future match?
 - **Prediction**: How reliable are the predictions for the future performance of players?
 
 # Data
 
-Team has set up a process to gather the historical data from the [RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0) website. The following is the code used to get the data from RotoGuru:
+Historical data on the performance of the players is extracted from the **[RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0)** website. Data scraped from RotoGuru includes information about the Fanduel points received by each player, player's position, player's opponent team, Home/Away match indication, etc. for each week.
+
+The following is the code used to get the data from RotoGuru:
 
 ```{r, message=FALSE, warning=FALSE,eval=FALSE}
+
 # Scrape rotoguru1 site for weekly FanDuel stats and bind each week's data to the 
 # pre-defined dataframe, 'd'.
 
@@ -84,7 +89,7 @@ mod.classic = lm(FanDuelPts ~ AvgPts5Wks, data = fdp)
 plot(FanDuelPts ~ AvgPts5Wks, data = fdp)
 ```
 
-The data points are all over the place, our model prevented in the next session will present our approach to use the predictors
+As can be seen from the graph above, the FanDuel data points are all over the place. The model proposed in the next section will present our approach to use the predictors.
 
 \newpage
 # Model
@@ -109,7 +114,7 @@ $x_{p}$ = interaction indicator term for opposing team score allowed by position
 
 $x_{home,p,r}$ = interaction indicator term for rank r, position p, and whether it is home game
 
-At higher level, we model the defense effect, $\beta_{defense}$, as how good(bad) a particular team's defense is against the player's position.  We pool the effect based on the position of the player.  That is, the defense coefficient is normally distributed from the same position specific distribution.
+At the higher level, we model the defense effect, $\beta_{defense}$, as how well a particular team's defense has performed against the player's position. We pool the effect based on the position of the player. That is, the defense coefficient is normally distributed from the same position specific distribution.
 
 $\beta_{defense,p} \sim N(\delta_p, \sigma_{\delta}^2)$
 
@@ -174,7 +179,7 @@ model {
 
 ```
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, r echo=FALSE}
 library(knitr)
 ```
 
