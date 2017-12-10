@@ -185,7 +185,7 @@ model {
 
 ```
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
 ```
 
@@ -595,7 +595,7 @@ The posterior predictive p-value using individual data point is `p.value.y.rep.a
 
 ## Prediction
 
-WE use the last week of data to check the prediction effectiveness of the model
+We use the last week of data to check the prediction effectiveness of the model.  This is essentially a cross validation analysis.
 
 ```{r}
 if (Num.Position == 1) {
@@ -639,9 +639,9 @@ for(s in 1:NTotalSim) {
 
 ```
 
-*Prediction of indvidual data point*
+### Prediction of Indvidual Player Performance
 
-Let's pick one example data point, `fdp_test[1,]`
+A measure of the effectiveness of this model is to predict individual player performance.  Consider an example data point, `fdp_test[1,]`
 
 ```{r}
 (fdp_test[1,])
@@ -649,7 +649,7 @@ Let's pick one example data point, `fdp_test[1,]`
 
 The real FanDuelPts is `r fdp_test$FanDuelPts[1]`
 
-The prediction value has the following 95% interval
+The predicted value has the following 95% interval
 
 ```{r}
 quantile(y.pred[, 1], c(0.025, 0.975))
@@ -657,8 +657,16 @@ quantile(y.pred[, 1], c(0.025, 0.975))
 
 which does contain the actual data value of `r fdp_test$FanDuelPts[1]`
 
+Here is the density plot of the posterior density
 
-Let's look at $Pr(y_{pred} >= y)$
+```{r}
+library(lattice)
+densityplot(y.pred[, 1])
+```
+
+### Overall Prediction Effectiveness
+
+To measure the overall prediction effectiveness, we can look at $Pr(y_{pred} >= y)$ as a posterior p-value.
 
 ```{r}
 y.pred.minus.y <- matrix(NA, NTotalSim, nrow(fdp_test))
@@ -883,9 +891,11 @@ The model has decent prediction ability.  It should be noted that we only picked
 
 # Contributions
 
-- **Aaron Ray** (aaronwr2@illinois.edu)
-- **Kiomars Nassiri** (nassiri2@illinois.edu)
-- **Michael Chan** (mhchan3@illinois.edu)
+All three members contribute roughly the same amount of works.  While each member owns certain pieces of the project, all members contribute idea, and review all parts of the project.  The following list summarizes the main contribution of individual member:
+
+- **Aaron Ray** (aaronwr2@illinois.edu) - Came up with the project idea, the primary goals, data discovery and attribution.
+- **Kiomars Nassiri** (nassiri2@illinois.edu) - Presentation and various documentation.
+- **Michael Chan** (mhchan3@illinois.edu) - Finalize data cleansing, drive the design, implementation, and the analysis of the model.
 
 # Reference
 
