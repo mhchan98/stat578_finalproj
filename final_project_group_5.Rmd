@@ -138,6 +138,12 @@ $\eta \sim N(0, 10000^2)$
 
 $\rho \sim N(0, 10000^2)$
 
+\newpage
+Here is the DAG model:
+
+![DAG model](dag.png)
+
+\newpage
 Here is the JAGS model:
 
 ```{r eval=FALSE}
