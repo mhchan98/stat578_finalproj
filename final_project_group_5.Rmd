@@ -212,42 +212,17 @@ fdp_train = droplevels(fdp_train)
 ```
 
 ```{r}
-Use.Rank = TRUE
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
 Num.Position = length(unique(fdp_train[, "Position"]))
 #Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
 Num.fixed.pred=1 #AvgOppPAP7Wks
-if (Use.Rank) {
-  Num.Rank = length(unique(fdp_train[, "Rank"]))
-  Num.HomeAwayInit = Num.Rank
-  Model.File.Ext = ""
-} else {
-  Num.HomeAwayInit = 1
-  Model.File.Ext = ".norank"
-}
+Num.Rank = length(unique(fdp_train[, "Rank"]))
+Num.HomeAwayInit = Num.Rank
+Model.File.Ext = ""
 
-
-if (Num.Position == 1) {
-  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
-  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_train)
-  if (Use.Rank) {
-    X.home = model.matrix(~ 0 + Rank , data=fdp_train)
-    X.away = model.matrix(~ 0 + Rank , data=fdp_train)
-  } else {
-    X.home = rep(1, nrow(fdp_train))
-    X.away = rep(1, nrow(fdp_train))
-  }
-} else {
-  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
-  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
-  if (Use.Rank) {
-    X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-    X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-  } else {
-    X.home = model.matrix(~ 0 + Position , data=fdp_train)
-    X.away = model.matrix(~ 0 + Position , data=fdp_train)
-  }
-}
+X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
+X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
 
 
 X.home = X.home * fdp_train$HomeGame
@@ -613,28 +588,9 @@ The percentage of predicted values that are less than zero is `perct.lt.zero` = 
 We use the last week of data to check the prediction effectiveness of the model.  This is essentially a cross validation analysis.
 
 ```{r}
-if (Num.Position == 1) {
-  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
-  X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_test)
-  if (Use.Rank) {
-    X.home.test = model.matrix(~ 0 + Rank , data=fdp_test)
-    X.away.test = model.matrix(~ 0 + Rank , data=fdp_test)
-  } else {
-    X.home.test = rep(1, nrow(fdp_test))
-    X.away.test = rep(1, nrow(fdp_test))
-  }
-} else {
-  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
-  X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_test)
-  if (Use.Rank) {
-    X.home.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
-    X.away.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
-  } else {
-    X.home.test = model.matrix(~ 0 + Position , data=fdp_test)
-    X.away.test = model.matrix(~ 0 + Position , data=fdp_test)
-  }
-}
-
+X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_test)
+X.home.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
+X.away.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
 
 X.home.test = X.home.test * fdp_test$HomeGame
 X.away.test = X.away.test * (1- fdp_test$HomeGame)
@@ -747,42 +703,16 @@ model {
 ```
 
 ```{r}
-Use.Rank = FALSE
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
 Num.Position = length(unique(fdp_train[, "Position"]))
 #Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
 Num.fixed.pred=1 #AvgOppPAP7Wks
-if (Use.Rank) {
-  Num.Rank = length(unique(fdp_train[, "Rank"]))
-  Num.HomeAwayInit = Num.Rank
-  Model.File.Ext = ""
-} else {
-  Num.HomeAwayInit = 1
-  Model.File.Ext = ".norank"
-}
+Num.HomeAwayInit = 1
+Model.File.Ext = ".norank"
 
-
-if (Num.Position == 1) {
-  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks + FanDuelSalary, data=fdp_train)
-  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks, data=fdp_train)
-  if (Use.Rank) {
-    X.home = model.matrix(~ 0 + Rank , data=fdp_train)
-    X.away = model.matrix(~ 0 + Rank , data=fdp_train)
-  } else {
-    X.home = rep(1, nrow(fdp_train))
-    X.away = rep(1, nrow(fdp_train))
-  }
-} else {
-  #X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position + FanDuelSalary:Position, data=fdp_train)
-  X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
-  if (Use.Rank) {
-    X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-    X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
-  } else {
-    X.home = model.matrix(~ 0 + Position , data=fdp_train)
-    X.away = model.matrix(~ 0 + Position , data=fdp_train)
-  }
-}
+X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
+X.home = model.matrix(~ 0 + Position , data=fdp_train)
+X.away = model.matrix(~ 0 + Position , data=fdp_train)
 
 
 X.home = X.home * fdp_train$HomeGame
@@ -836,11 +766,7 @@ NChain = 4
 NThin = 5
 NTotalSim = NSim * NChain / 5
 if (runModel) {
-  if(Use.Rank) {
-    bug.file = "fdp.bug"
-  } else {
-    bug.file = "fdp.norank.bug"
-  }
+  bug.file = "fdp.norank.bug"
   m <- jags.model(bug.file, data.jags, inits = jags.inits, n.chains=NChain, n.adapt = 1000)
   save(file=paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""), list="m")
 } else {
@@ -897,10 +823,27 @@ The effective number of parameters("penalty") is 7.02, and the Plummer's DIC ("P
 \newpage
 # Results
 
-The model has decent prediction ability.  It should be noted that we only picked two positions to predict due to computation resource constraint.  In the pursue of creating this model, we have multiple route:
+This report tries to answer the following two questions:
+
+- **Interpretation**: What features can help us effectively predict FanDuel points players receive in a future match?
+- **Prediction**: How reliable are the predictions for the future performance of players?
+
+## Interpretation
+
+In our model section, we defined the mixed hierarchical linear regression model that depends on the defensive effectiveness of the opposing team, ($\beta_{defense}$), home and away effectiveness ($\beta_{home}$ and $\beta_{away}$) and the average offense performance ($\alpha$), with pooling based on position and/or rank.  In the *General posterior model assumption check* section, we have shown that the $\beta_{home}$ and $\beta_{away}$ have the expected interpretation in that players enjoy home advantage in general ($\beta_{home} > \beta_{away}$)
+
+## Prediction
+
+In the *Prediction* subsection under the *Model Assessment* section, we have shown that the model has reasonable prediction ability. In the *Prediction of Individual Player Performance* section, we have shown that the model predicted the `FanduelPoint` of a player within the 95% posterior credible interval. In the *Overall Prediction Effectiveness* section, we have shown how the model predicted the `FanduelPoint` of all players relatively well.
+
+## Analysis Note
+
+It should be noted that we only picked two positions to predict due to computation resource constraint.  In the pursue of creating this model, we have tried multiple routes:
 
 1) We have tried to include all positions.  However, the model took 5 hours to finish the MCMC simulation.  Therefore, we elected to include a smaller subset.
-2) We have tried to include FanDuelSalary as a predictor.  However, that does not improve the model, and added sufficient time to compute - About 30 minutes to compute.  
+2) We have tried to include `FanDuelSalary` as a predictor.  However, that does not improve the model, and added sufficient time to compute - About 30 minutes to compute.  
+
+We believe the current model is a comprise that give reasonable balance of interpretability(a simpler model) and predictability (which may require more parameters)
 
 
 
@@ -918,4 +861,227 @@ The analysis is inspired by the study presented in the article, **[Bayesian Hier
 
 # Appendices
 
-- Add data cleaning code here
+## Data Gathering and Processing Code
+
+```{r warning=FALSE}
+library(rvest)
+library(rjags)
+library(MASS)
+library(lattice)
+library(magrittr)
+library(qdap)
+library(TTR)
+library(moments)
+```
+
+## Getting the Data
+
+This section is dedicated to gathering statistics for 2017 FanDuel Football Stats. For the source of this data see <http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=3&inact=0&maxprc=99999&outcsv=0>.
+
+
+### Get Raw Data
+```{r eval=FALSE}
+#Initiate primary dataframe with 10 column names
+d = data.frame(matrix(ncol=10,nrow=1))
+cnames = c("Week","Year","PlayerId","Name","Position","Team","HomeGame","Opponent","FanDuelPts","FanDuelSalary")
+colnames(d) <- cnames
+
+#Scrape rotoguru1 site for weekly FanDuel stats and bind each week's data to 'd'
+for(year in 2014:2017){
+  for(week in 1:16){
+    page = read_html(
+      gsub(" ","",
+           paste("http://rotoguru1.com/cgi-bin/fyday.pl?week=",week,"&year=",year ,"&game=fd&scsv=1")
+      ))
+    dtext = page %>% html_nodes("pre") %>% html_text(trim = TRUE)
+    dtable = read.table(text=dtext, sep = ";", header=TRUE, col.names = cnames, quote=NULL)
+    d = rbind(d,dtable)
+  }
+  
+}
+
+write.csv(d, file = "rawfdp.csv",row.names=FALSE, na="")
+```
+
+```{r}
+d <- read.csv("rawfdp.csv", sep = ',', header = TRUE)
+d$Opponent <- lapply(d$Opponent, as.character)
+```
+
+### Basic clean up
+```{r}
+
+#Clean up
+##Remove null row
+d2=d[-1,]
+##Remove invalid entries
+d2=d2[d2$Opponent>"-",]
+##Bring all negative scores up to 0, these scores are typically very close to 0 anyway
+d2[d2$FanDuelPts<0,]$FanDuelPts = 0
+##Remove all non-defense player scores that are less than 1 since these players most likely didn't play or played very little
+d2[d2$FanDuelPts < 1 & d2$Position != "def",]$Year = 0
+d2 = d2[d2$Year > 0,]
+##Convert home and away abbreviations to 1's and 0's
+d2$HomeGame = as.integer(mgsub(c("h","a"),c(1,0),d2$HomeGame))
+
+
+#Replace Team/Opponent abbreviated locations with team names
+tmabbs = c("ari", "atl", "bal", "buf", "car", "chi", "cin", "cle", "dal", "den", "det", "gnb", "hou", "ind", "jac", "kan", "lac", "lar", "mia", "min", "nor", "nwe", "nyg", "nyj", "oak", "phi", "pit", "sdg", "sea", "sfo", "stl", "tam", "ten", "was")
+tmnames = c("Cardinals", "Falcons", "Ravens", "Bills", "Panthers", "Bears", "Bengals", "Browns", "Cowboys", "Broncos", "Lions", "Packers", "Texans", "Colts", "Jaguars", "Chiefs", "Chargers", "Rams", "Dolphins", "Vikings", "Saints", "Patriots", "Giants", "Jets", "Raiders", "Eagles", "Steelers", "Chargers", "Seahawks", "49ers", "Rams", "Buccaneers", "Titans", "Redskins")
+d2$Team = mgsub(tmabbs,tmnames,d2$Team)
+d2$Opponent = mgsub(tmabbs,tmnames,d2$Opponent)
+
+#Create YearWeek for each year/week combo
+d2=d2[order(d2$Opponent,d2$Position,d2$Year,d2$Week),]
+d2$YearWeek = d2$Year*100+d2$Week
+```
+
+### Generate moving 7 week team defense statistics
+```{r}
+
+#Calculate the 6 week running mean, median, and std deviation of total points scored against each defense by each position
+dPAP = aggregate(FanDuelPts~Year+YearWeek+Position+Opponent, data=d2, FUN=sum)
+dPAP = dPAP[order(dPAP$Opponent,dPAP$Position,dPAP$YearWeek),]
+
+# Calculate AvgOppPAP7Wks - The 7 weeks average points that were scored on by players who play a certain position for a given team
+opponent_position_pairs = unique(dPAP[,c('Opponent','Position')])
+for (i in 1:nrow(opponent_position_pairs)) {
+  dPAP.which = which(dPAP$Opponent == opponent_position_pairs[i, 'Opponent'] & dPAP$Position == opponent_position_pairs[i, 'Position'])
+  dPAP[dPAP.which, 'AvgOppPAP7Wks'] = runMean(dPAP[dPAP.which, 'FanDuelPts'],n=7)
+  dPAP[dPAP.which, 'SdOppPAP7Wks'] = runSD(dPAP[dPAP.which, 'FanDuelPts'],n=7)
+  
+  # shift down by 1 row, as it should be the average score of LAST n weeks(excluding current week)
+  dtemp = dPAP[dPAP.which, ]
+  
+  dtemp = rbind(NA, dtemp[1:nrow(dtemp)-1, ])
+  dPAP[dPAP.which, 'AvgOppPAP7Wks'] = dtemp$AvgOppPAP7Wks
+  dPAP[dPAP.which, 'SdOppPAP7Wks'] = dtemp$SdOppPAP7Wks
+}
+
+dPAP = dPAP[c("Year","YearWeek","Position","Opponent","AvgOppPAP7Wks", "SdOppPAP7Wks")]
+```
+
+```{r}
+#Calculate mean and std deviation of MedOppPAP7Wks for all defenses
+dPAP2 = data.frame(aggregate(dPAP$AvgOppPAP7Wks ~ Position, data=dPAP, function(x) c(mean=mean(x), sd=sd(x))))
+dPAP2 = data.frame(Position = dPAP2$Position, OallAvgPAP = dPAP2$dPAP.AvgOppPAP7Wks[,1], OallStdevPAP = dPAP2$dPAP.AvgOppPAP7Wks[,2])
+
+#Join the running stats to the full dataset
+d3 = merge(d2,dPAP,by=c("Year","YearWeek","Position","Opponent"))
+d3 = merge(d3,dPAP2,by="Position")
+```
+
+### Generate moving 5 week player offense statistic
+```{r}
+#Calculate 5 week median and std deviations for each player
+d4=d3[order(d3$PlayerId,d3$YearWeek),]
+
+# Calculate AvgOppPAP7Wks - The 7 weeks average points that were scored on by players who play a certain position for a given team
+playerIds = unique(d4[,c('PlayerId')])
+n = 5
+for (i in 1:length(playerIds)) {
+  d4.which = which(d4$PlayerId == playerIds[i])
+  if (length(d4.which) > n) {
+    d4[d4.which, 'AvgPts5Wks'] = runMean(d4[d4.which, 'FanDuelPts'],n=n)
+    d4[d4.which, 'StdevPts5Wks'] = runSD(d4[d4.which, 'FanDuelPts'],n=n)
+    
+    # shift down by 1 row, as it should be the average score of LAST n weeks(excluding current week)
+    dtemp = d4[d4.which, ]
+    
+    dtemp = rbind(NA, dtemp[1:nrow(dtemp)-1, ])
+    d4[d4.which, 'AvgPts5Wks'] = dtemp$AvgPts5Wks
+    d4[d4.which, 'StdevPts5Wks'] = dtemp$StdevPts5Wks    
+  }
+}
+
+```
+
+```{r}
+# remove na
+d4 = d4[!is.na(d4$AvgPts5Wks), ]
+#Remove 2014 which was only used to calculate the first 6 running stats of 2015
+d4 = d4[d4$Year>2014,]
+```
+
+## Player Offense and defense Rank
+```{r}
+createRankColumn <- function(data, rank_column) {
+  year_week = unique(data[,c('YearWeek')])
+  position = unique(data[,c('Position')])
+  result_column = 'result_column'
+  data[result_column] = NA
+  for (i in 1:length(year_week)) {
+    for (j in 1:length(position)) {
+      #data_year_week.which = which(data$YearWeek == year_week[i] & data$Position == position[j] )
+      data_year_week = data[data$YearWeek == year_week[i] & data$Position == position[j], ]
+      data_year_week_quantile = quantile(data_year_week[rank_column],
+                                         c(0.25, 0.5, 0.75), na.rm = TRUE)
+      
+      data[data$YearWeek == year_week[i]& data$Position == position[j]
+          & data[rank_column] < data_year_week_quantile[1],
+          result_column] = 'Rank4'
+      data[data$YearWeek == year_week[i] & data$Position == position[j]
+          & data[rank_column] >= data_year_week_quantile[1] 
+          & data[rank_column] < data_year_week_quantile[2],
+          result_column] = 'Rank3'
+      data[data$YearWeek == year_week[i] & data$Position == position[j]
+          & data[rank_column] >= data_year_week_quantile[2] 
+          & data[rank_column] < data_year_week_quantile[3],
+          result_column] = 'Rank2'
+      data[data$YearWeek == year_week[i] & data$Position == position[j]
+          & data[rank_column] >= data_year_week_quantile[3],
+          result_column] = 'Rank1'  
+    }
+  }
+  data[result_column]
+}
+
+#Rank player based on current AvgPts5Wks 
+d4['OffRnk5Wks'] = createRankColumn(d4, 'AvgPts5Wks')
+d4['DefRnk7Wks'] = createRankColumn(d4, 'AvgOppPAP7Wks')
+
+# Alternative approach
+#Rank defense against position based on rounded # of standard deviations from the overall average
+#d4$DefRnk7Wks = round(abs((d4$AvgOppPAP7Wks-d4$OallAvgPAP)/d4$OallStdevPAP))+1
+#summary(d4$DefRnk7Wks)
+```
+
+```{r}
+
+head(d4)
+```
+
+```{r eval=FALSE}
+#path = rstudioapi::getSourceEditorContext()$path
+#path = gsub(sub("(.*?).*\\/","",path),"fdpfinal.csv",path)
+write.csv(d4, file = "fdpfinal.csv",row.names=FALSE, na="")
+```
+
+
+## Density Plots
+
+```{r}
+#FanDuelPts distribution by position
+densityplot(~FanDuelPts, data=d4,groups=Position,auto.key = TRUE, adjust=1.2)
+##Example tight end kurtosis and skew
+kurtosis(d4[d4$Position=="TE",]$FanDuelPts)
+skewness(d4[d4$Position=="TE",]$FanDuelPts)
+
+#sqrt(FanDuelPts) distribution by position to improve kurtosis and skew
+densityplot(~sqrt(FanDuelPts), data=d4,groups=Position,auto.key = TRUE, adjust=1.2)
+##Example tight end kurtosis and skew
+kurtosis(sqrt(d4[d4$Position=="TE",]$FanDuelPts))
+skewness(sqrt(d4[d4$Position=="TE",]$FanDuelPts))
+
+#plotting individual players FanDuelPts
+densityplot(~FanDuelPts, data=d4[d4$PlayerId>2920 & d4$PlayerId<2930 & d4$Year==2016,],groups=Name,auto.key = TRUE, adjust=1.2)
+
+#plotting individual players AvgPts5Wks
+densityplot(~AvgPts5Wks, data=d4[d4$PlayerId>2920 & d4$PlayerId<2930,],groups=Name,auto.key = TRUE, adjust=1.2)
+
+#plotting AvgOppPAP7Wks by position
+densityplot(~AvgOppPAP7Wks, data=d4,groups=Position,auto.key = TRUE, adjust=1.2)
+
+```
+
+
