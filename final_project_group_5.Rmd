@@ -29,29 +29,7 @@ We will leverage a Hierarchical Bayesian approach with the Markov Chain Monte Ca
 
 Historical data on the performance of the players is extracted from the **[RotoGuru](http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=0&inact=0&maxprc=99999&outcsv=0)** website. Data scraped from RotoGuru includes information about the FanDuel points received by each player, player's position, player's opponent team, Home/Away match indication, etc. for each week.
 
-The following is the code used to get the data from RotoGuru:
-
-```{r, message=FALSE, warning=FALSE,eval=FALSE}
-
-# Scrape rotoguru1 site for weekly FanDuel stats and bind each week's data to the 
-# pre-defined dataframe, 'd'.
-
-for(year in 2014:2017){
-  for(week in 1:16){
-    page = read_html(
-      gsub(" ","",
-           paste("http://rotoguru1.com/cgi-bin/fyday.pl?week=",week,"&year=",
-                 year ,"&game=fd&scsv=1")
-      ))
-    dtext = page %>% html_nodes("pre") %>% html_text(trim = TRUE)
-    dtable = read.table(text=dtext, sep = ";", header=TRUE, col.names = cnames,
-                        quote=NULL)
-    d = rbind(d,dtable)
-  }
-}
-```
-
-Data cleaning is performed using R routines. Some data cleaning tasks are needed to calculate Player rank.
+Data cleaning is performed using R routines. Some data cleaning tasks are needed to calculate Player rank.  The code used to get the data from RotoGuru can be found in the Appendices - Data Section.
 
 ## Response Variables
 
@@ -70,28 +48,14 @@ Data cleaning is performed using R routines. Some data cleaning tasks are needed
 ```{r}
 fdp <- read.csv("fdpfinal.csv", sep = ',', header = TRUE)
 
-head(fdp)
+head(fdp, 2)
 ```
 
 
-```{r}
+```{r echo=FALSE}
 fdp['Rank'] = fdp$OffRnk5Wks
 ```
 
-
-## Simple LM graph
-
-$y|\alpha \sim N(\alpha,\sigma_y^2 I)$
-
-```{r}
-mod.classic = lm(FanDuelPts ~ AvgPts5Wks, data = fdp)
-
-plot(FanDuelPts ~ AvgPts5Wks, data = fdp)
-```
-
-As can be seen from the graph above, the FanDuel data points are all over the place. The model proposed in the next section will present our approach to use the predictors.
-
-\newpage
 # Model
 
 At the lowest level, we model the performance (`FanDuelPts`) as normally-distributed around a true value:
@@ -140,12 +104,6 @@ $\rho \sim N(0, 10000^2)$
 
 Note that in this project, we model the performance (`FanDuelPts`) as normally-distributed around a true value.  Alternatively, we could have use Poisson distribution instead to avoid predicting the `FanDuelPts` less than zero.  However, for the purpose of predicting player's `FanDuelPts`, we mainly only need the relative strength of players and the normal assumption produces good enough model.  The portion of predicted `FanDuelPts` should be relatively small.
 
-\newpage
-Here is the DAG model:
-
-![DAG model](dag.png)
-
-\newpage
 Here is the JAGS model:
 
 ```{r eval=FALSE}
@@ -187,31 +145,34 @@ model {
 
 ```
 
+Here is the DAG model:
+
+![DAG model](dag.png)
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
 ```
 
-\newpage
 # Computation
 
 We use overdispersed starting points and 4 chains to initialized. We have seen slow mix in and hence we use thinning of 5 to get a smaller number of data points.  Convergence diagnostics are performed graphically as well as using Gelman Statistics.  We make sure sample size are > 400.  The Monte Carlo error of the $\beta$ are less than 0.06, but the ones of the hyper parameters are much higher at around 5.
 
 ## Training Data Setup
 
-Due to significant roster change usually happens in the off-season, we believe it is the best to not use data across seasons.  We use 2016 data as it is the most recent year with a full season. We set aside the last week for verifying prediction accuracy of the model.
+Due to significant roster change usually happens in the off-season, we believe it is the best to not use data across seasons.  We use 2016 data, `fdp_train`,  as it is the most recent year with a full season. We set aside the last week for verifying prediction accuracy of the model, `fdp_test`.
 
-```{r}
-#fdp_train=fdp[fdp$Year == 2015, ]
+```{r echo=FALSE}
 fdp_train=fdp[fdp$Year == 2016  & ((fdp$Position == "QB"& fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary))|fdp$Position == "PK"), ]
-#fdp_train=fdp[fdp$Year == 2015 & (fdp$Position == "QB" | fdp$Position == "RB") & fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary), ]
+```
 
+```{r echo=FALSE}
 fdp_test =fdp_train[fdp_train$YearWeek >= 201615, ]
 fdp_test = droplevels(fdp_test)
 fdp_train=fdp_train[fdp_train$YearWeek < 201615, ]
 fdp_train = droplevels(fdp_train)
 ```
 
-```{r}
+```{r echo=FALSE}
 Num.Opponent = length(unique(fdp_train[, "Opponent"]))
 Num.Position = length(unique(fdp_train[, "Position"]))
 #Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
@@ -231,21 +192,21 @@ X = cbind(X.defense, X.home, X.away)
 
 ```
 
-The following code set up the data used in the model computation.  `X.defense` captures the interaction terms between the defensive power (higher `AvgOppPAP7Wks` means the player is facing a weaker team, since they allows players score more point on them) and position.
+This session shows some sample X used in the computation.  `X.defense` captures the interaction terms between the defensive power (higher `AvgOppPAP7Wks` means the player is facing a weaker team, since they allows players score more point on them) and position.
 
-**Sample X.defense**
-```{r}
-head(X.defense)
+**Sample `X.defense`**
+```{r echo=FALSE}
+head(X.defense, 1)
 ```
 
 `X.home` and `X.away` are the interaction terms between Position and Rank.  Together `X.home` and `X.away` will always sum to one.  The intercept is implicitly included.
 
-**Sample X.home**
-```{r}
-head(X.home)
+**Sample `X.home`**
+```{r echo=FALSE}
+head(X.home, 1)
 ```
 
-
+The code used to set up the data used in the model computation is listed in *Appendices - Computation* section.
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 library(rjags)
@@ -255,7 +216,7 @@ set.seed(20171008)
 
 ##Initialization
 
-```{r}
+```{r echo=FALSE}
 # Initialization List for the 4 chains
 jags.inits=list(
   list( sigmasqinv=    0.01,  delta = rep(-100000, Num.Position * Num.fixed.pred),
@@ -291,7 +252,7 @@ data.jags <- list(
 
 
 
-```{r warning=FALSE}
+```{r warning=FALSE,message=FALSE, echo=FALSE}
 burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col, n.thin=1) {
   update(m, N.burnin) # burn-in
   
@@ -314,9 +275,9 @@ burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col, n.thin=1) {
 
 ```
 
-```{r warning=FALSE}
-runModel=TRUE
-runSample=TRUE
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+runModel=FALSE
+runSample=FALSE
 
 mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
 
@@ -360,41 +321,30 @@ if (runSample) {
 
 ###Trace Plots
 
-The trace plots of all parameters show good distribution convergence.
-
-```{r fig.width=10,fig.height=11}
-plot(result$coda.sam, smooth=FALSE)
-```
+The trace plots of all parameters show good distribution convergence.  Please see *Appendices - Converage diagnostics* for all trace plots and the Gelman Statistics summary, and MCMC Summary
 
 ###Gelman Statistics
 
-```{r}
-result$gelman.R
-```
-
 Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
 
-###MCMC Summary
-```{r}
-(m.summary = summary(result$coda.sam))
-```
 
-
-###Effective Sample Size
-```{r}
+##Effective Sample Size
+```{r }
 (eff.size = effectiveSize(result$coda.sam[, ]))
 ```
 
-The effective sample sizes of all parameters are greater than 400.
+The effective sample sizes of all parameters are greater than 400. See appendics for full output.
 
 \newpage
 #Model Assessment
+
+All code in this sections are listed in appendices
 
 ##General posterior model assumption check
 
 *Probabiliy of players should perform better at home than away*
 
-```{r}
+```{r echo = FALSE}
 post.samp = as.matrix(result$coda.sam)
 
 beta.home = post.samp[, paste("beta.home[",1:(Num.Rank*Num.Position),"]", sep="")]
@@ -407,7 +357,7 @@ for (r in 1:Num.Rank) {
     prob.home.away[idx] = mean(beta.home[, idx] > beta.away[, idx])
   }
 }
-prob.home.away
+
 prob.home.away.df = data.frame(colnames(X.home))
 prob.home.away.df$prob.home.bt.away = prob.home.away
 
@@ -422,7 +372,7 @@ The above table shows that players perform better at home than away as expected.
 *Beta defense*
 
 If a player is facing a team which gives up more points to players on average, we expect the player will score more points.
-```{r}
+```{r  echo = FALSE}
 Num.fixed.size=Num.Position*Num.fixed.pred
 beta.defense = post.samp[, paste("beta.defense[",1:Num.fixed.size,"]", sep="")]
 
@@ -451,7 +401,7 @@ kable(beta.defense.int.df)
 We observe that the median beta.defense for PK is positive as expected.  But for QB, it is negative, that implies QB actually scores less against bad defensive team.  
 
 *DIC*
-```{r}
+```{r  echo = FALSE}
 (dic.samp = dic.samples(m, NTotalSim))
 
 ```
@@ -471,8 +421,7 @@ $$
 
 where $\hat{cor}(\epsilon, \text{time})$ is sample correlation between the error vector $\epsilon$ and the year week in the data. The larger this quantity is for the model, the less well it fits the data as that would mean the error is correlated with time.
 
-*The simulated error vectors $\epsilon$ (as rows of a matrix):*
-```{r}
+```{r echo = FALSE}
 error.sim <- matrix(NA, NTotalSim, nrow(fdp_train))
 y_hat.sim <- matrix(NA, NTotalSim, nrow(fdp_train))
 for(s in 1:NTotalSim) {
@@ -482,9 +431,7 @@ for(s in 1:NTotalSim) {
 
 ```
 
-*The simulated replicate error vectors $\epsilon^{rep}$ (as rows of a matrix), which are the error vectors computed using replicate response vectors $y^{rep}$:*
-
-```{r}
+```{r echo = FALSE}
 
 post.sigma.2.sim <- post.samp[,"sigmasq"]
 post.sigma.sim <- sqrt(post.sigma.2.sim)
@@ -502,40 +449,36 @@ for(s in 1:NTotalSim) {
 
 ```
 
-*The simulated values of $T(y, X, \theta )$*
-```{r}
+```{r echo = FALSE}
 T.sim = abs(cor(t(error.sim), fdp_train$YearWeek))
-head(T.sim)
 ```
 
-*The simulated values of $T(y^{rep}, X, \theta )$*
-```{r}
+
+```{r echo = FALSE}
 T.rep.sim = abs(cor(t(error.rep), fdp_train$YearWeek))
-head(T.rep.sim)
 ```
 
-*The simulated values of $T(y^{rep}, X, \theta )$ versus those of  $T(y, X, \theta )$, with a reference line indicating where the two values would be equal.*
 
-```{r}
+```{r echo = FALSE, eval=FALSE}
 plot(T.sim, T.rep.sim, pch=".", cex=2,
   xlim=c(min(T.sim, T.rep.sim), max(T.sim, T.rep.sim)),
   ylim=c(min(T.sim, T.rep.sim), max(T.sim, T.rep.sim)),
   xlab="T(y,x,theta)", ylab="T(y.rep,x,theta)")
 abline(a=0,b=1)
 ```
-The posterior predictive p-value:
 
-```{r}
-(p.value = mean(T.rep.sim >= T.sim))
+
+```{r echo = FALSE}
+p.value = mean(T.rep.sim >= T.sim)
 ```
 
-The p.value is `r p.value`, > 0.05, which does not indicate any evidence of problem.
+The p.value, `mean(T.rep.sim >= T.sim)` , is `r p.value`, > 0.05, which does not indicate any evidence of problem.
 
 ### Chi-square Discrepancy Check
 
 Chi-square discrepancy check is used to check for general model issues like mis-specified means, mis-specified variances, and over-concentrated prior.
 
-```{r}
+```{r echo=FALSE}
 
 
 Tchi <- numeric(NTotalSim)
@@ -544,10 +487,10 @@ for(s in 1:NTotalSim){
   Tchi[s] <- sum((fdp_train$FanDuelPts - y_hat.sim[s,])^2 / post.sigma.sim[s])
   Tchirep[s] <- sum((yreps[s,] - y_hat.sim[s,])^2 / post.sigma.sim[s])
 }
-(p.value.Tchi = mean(Tchirep >= Tchi))
+p.value.Tchi = mean(Tchirep >= Tchi)
 ```
 
-```{r}
+```{r echo=FALSE}
 plot(Tchi, Tchirep, pch=".", cex=2,
   xlim=c(min(Tchi, Tchirep), max(Tchi, Tchirep)),
   ylim=c(min(Tchi, Tchirep), max(Tchi, Tchirep)),
@@ -560,13 +503,13 @@ The posterior predictive p-value using the chi-square discrepancy is `p.value.Tc
 ### Individual Data Point Discrepancy Check
 
 **Using $Pr(y^{rep} \geq y | y)$ as posterior predictive p-value**
-```{r}
+```{r echo=FALSE}
 yreps.minus.y <- matrix(NA, NTotalSim, nrow(fdp_train))
 for(s in 1:NTotalSim) {
   yreps.minus.y[s, ] <- yreps[s, ] - fdp_train$FanDuelPts
 }
 
-(p.value.y.rep.all = mean(yreps.minus.y > 0))
+p.value.y.rep.all = mean(yreps.minus.y > 0)
 ```
 
 The posterior predictive p-value using individual data point is `p.value.y.rep.all` = `r p.value.y.rep.all`, which is > 0.05.  This shows no evidence of problem.
@@ -575,7 +518,7 @@ The posterior predictive p-value using individual data point is `p.value.y.rep.a
 
 As discussed in the model section, we use normal distribution, instead of Poisson distribution, to simplify the model.  Here we'll check the portion of predicted value < 0.
 
-```{r}
+```{r echo=FALSE}
 perct.lt.zero = mean(yreps < 0)
 ```
 
@@ -587,7 +530,7 @@ The percentage of predicted values that are less than zero is `perct.lt.zero` = 
 
 We use the last week of data to check the prediction effectiveness of the model.  This is essentially a cross validation analysis.
 
-```{r}
+```{r echo=FALSE}
 X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_test)
 X.home.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
 X.away.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
@@ -597,7 +540,7 @@ X.away.test = X.away.test * (1- fdp_test$HomeGame)
 X.test = cbind(X.defense.test, X.home.test, X.away.test)
 ```
 
-```{r}
+```{r echo=FALSE}
 y_hat.test <- matrix(NA, NTotalSim, nrow(fdp_test))
 for(s in 1:NTotalSim) {
   y_hat.test[s, ] =  fdp_test$AvgPts5Wks + (X.defense.test %*% beta.defense[s, ]) + (X.home.test %*% beta.home[s, ]) + (X.away.test %*% beta.away[s, ])
@@ -612,47 +555,39 @@ for(s in 1:NTotalSim) {
 
 ### Prediction of Individual Player Performance
 
-A measure of the effectiveness of this model is to predict individual player performance.  Consider an example data point, `fdp_test[1,]`
-
-```{r}
-(fdp_test[1,])
-```
-
-The real FanDuelPts is `r fdp_test$FanDuelPts[1]`
+A measure of the effectiveness of this model is to predict individual player performance.  Consider an example data point, `fdp_test[1,]`. The real FanDuelPts is `r fdp_test$FanDuelPts[1]`
 
 The predicted value has the following 95% interval
 
-```{r}
+```{r echo=FALSE}
 quantile(y.pred[, 1], c(0.025, 0.975))
 ```
 
 which does contain the actual data value of `r fdp_test$FanDuelPts[1]`
 
-Here is the density plot of the posterior density
-
-```{r}
+```{r echo=FALSE}
 library(lattice)
-densityplot(y.pred[, 1])
+#densityplot(y.pred[, 1])
 ```
 
 ### Overall Prediction Effectiveness
 
 To measure the overall prediction effectiveness, we can look at $Pr(y_{pred} >= y)$ as a posterior p-value.
 
-```{r}
+```{r echo=FALSE}
 y.pred.minus.y <- matrix(NA, NTotalSim, nrow(fdp_test))
 for(s in 1:NTotalSim) {
   y.pred.minus.y[s, ] <- y.pred[s, ] - fdp_test$FanDuelPts
 }
 
-(p.value.y.pred.all = mean(y.pred.minus.y > 0))
+p.value.y.pred.all = mean(y.pred.minus.y > 0)
 ```
 
 The probability of $y_{pred} >= y$ is `r p.value.y.pred.all`, close to 0.5, which implies a relatively good predictive value.  
 
 *A look at a cross section of how one simulation of a prediction of the whole test set*
 
-```{r}
+```{r echo=FALSE}
 for (s in 1:1) {
   plot(fdp_test$FanDuelPts, y.pred[s, ], pch=".", cex=2,
   xlim=c(min(y.pred[s, ], fdp_test$FanDuelPts), max(y.pred[s, ], fdp_test$FanDuelPts)),
@@ -663,164 +598,7 @@ for (s in 1:1) {
 
 ```
 
-\newpage
-##Alternative Model - no rank
 
-```{r eval=FALSE}
-#sink("fdp.norank.bug")
-#cat("
-model {
-  for (i in 1:length(y)) {
-    y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
-                 + inprod(X.home[i, ], beta.home) 
-                 + inprod(X.away[i, ], beta.away), sigmasqinv)
-  }
-  
-  # The entry of the beta.defense corresponds to Opponent:Position
-  # In our model, we pool the beta.defense based on position. 
-  # i.e. All defense effects of the same position are drawn from the same distribution
-  for (p in 1:Num.Position) {
-    beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
-    delta[p] ~ dnorm(0, 1/100000^2)
-  }
-  
-  # The entry of the beta.home and beta.away corresponds to Position
-  # In our model, we pool the beta.home/away based on Position
-  # NO RANK
-  for (t in 1:Num.Position) {
-    beta.home[t] ~ dnorm(eta, 1/1000^2)
-    beta.away[t] ~ dnorm(rho, 1/1000^2)
-  }
-  eta ~ dnorm(0, 1/100000^2)
-  rho ~ dnorm(0, 1/100000^2)
-
-  sigmasqinv ~ dgamma(0.0001, 0.0001)
-  sigmasq <- 1/sigmasqinv
-}
-#    ",fill = TRUE)
-#sink()
-
-```
-
-```{r}
-Num.Opponent = length(unique(fdp_train[, "Opponent"]))
-Num.Position = length(unique(fdp_train[, "Position"]))
-#Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
-Num.fixed.pred=1 #AvgOppPAP7Wks
-Num.HomeAwayInit = 1
-Model.File.Ext = ".norank"
-
-X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
-X.home = model.matrix(~ 0 + Position , data=fdp_train)
-X.away = model.matrix(~ 0 + Position , data=fdp_train)
-
-
-X.home = X.home * fdp_train$HomeGame
-X.away = X.away * (1- fdp_train$HomeGame)
-X = cbind(X.defense, X.home, X.away)
-
-```
-
-```{r}
-# Initialization List for the 4 chains
-jags.inits=list(
-  list( sigmasqinv=    0.01,  delta = rep(-100000, Num.Position * Num.fixed.pred),
-        eta = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
-        rho = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
-  list( sigmasqinv=    0.01,  delta = rep(100000, Num.Position * Num.fixed.pred),
-        eta = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
-        rho = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
-  list( sigmasqinv=0.000001,  delta = rep(-100000, Num.Position * Num.fixed.pred),
-        eta = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
-        rho = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
-  list( sigmasqinv=0.000001,  delta = rep(100000, Num.Position * Num.fixed.pred),
-        eta = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
-        rho = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
-        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
-)
-
-data.jags <- list(
-  y= fdp_train$FanDuelPts,
-  alpha = fdp_train$AvgPts5Wks,
-  X.defense = X.defense,
-  X.home = X.home,
-  X.away = X.away,
-  Num.fixed.pred=Num.fixed.pred,
-  Num.Position=Num.Position
-  #Num.Opponent=Num.Opponent,
-  #Num.Rank=Num.Rank
-)
-```
-
-```{r warning=FALSE}
-runModel=TRUE
-runSample=TRUE
-
-mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
-
-NSim = 30000
-NChain = 4
-NThin = 5
-NTotalSim = NSim * NChain / 5
-if (runModel) {
-  bug.file = "fdp.norank.bug"
-  m <- jags.model(bug.file, data.jags, inits = jags.inits, n.chains=NChain, n.adapt = 1000)
-  save(file=paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""), list="m")
-} else {
-  load(paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""))
-  m$recompile()
-}
-
-load.module("dic")
-
-N.Retry.Loop = 1
-if (runSample) {
-  N.burnin=2500/2
-  for (loopIdx in 1:N.Retry.Loop) {
-    (start_time <- Sys.time())
-    (N.burnin = N.burnin * 2)
-    result = burnAndSample(m, N.burnin, NSim, show.plot=FALSE, mon.col = mon.col, n.thin=NChain)
-    (end_time <- Sys.time())
-    (result$gelman.R.max)    
-  }
-  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
-  save(file=paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""), list="result")
-  save(file=paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""), list="m")
-} else {
-  N.burnin=2500/2 * (2**N.Retry.Loop)
-  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
-  load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
-  load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
-  m$recompile()
-  gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
-}
-```
-
-Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
-
-```{r}
-(m.summary = summary(result$coda.sam))
-```
-
-
-*Effective Sample Size*
-```{r}
-(eff.size = effectiveSize(result$coda.sam[, ]))
-```
-The effective sample sizes of all parameters are greater than 400.
-
-*DIC*
-```{r}
-(dic.samp = dic.samples(m, NTotalSim))
-
-```
-
-The effective number of parameters("penalty") is 7.02, and the Plummer's DIC ("Penalized deviance") is 4781.  This model has a higher DIC compared with the original one with rank(4719).  Hence, we conclude that the original model (with rank) is better for prediction.
-
-\newpage
 # Results
 
 This report tries to answer the following two questions:
@@ -861,7 +639,9 @@ The analysis is inspired by the study presented in the article, **[Bayesian Hier
 
 # Appendices
 
-## Data Gathering and Processing Code
+## Data
+
+### Data Gathering and Processing Code
 
 ```{r warning=FALSE}
 library(rvest)
@@ -874,12 +654,12 @@ library(TTR)
 library(moments)
 ```
 
-## Getting the Data
+### Getting the Data
 
 This section is dedicated to gathering statistics for 2017 FanDuel Football Stats. For the source of this data see <http://rotoguru1.com/cgi-bin/fstats.cgi?pos=0&sort=4&game=f&colA=0&daypt=0&xavg=3&inact=0&maxprc=99999&outcsv=0>.
 
 
-### Get Raw Data
+#### Get Raw Data
 ```{r eval=FALSE}
 #Initiate primary dataframe with 10 column names
 d = data.frame(matrix(ncol=10,nrow=1))
@@ -908,7 +688,7 @@ d <- read.csv("rawfdp.csv", sep = ',', header = TRUE)
 d$Opponent <- lapply(d$Opponent, as.character)
 ```
 
-### Basic clean up
+#### Basic clean up
 ```{r}
 
 #Clean up
@@ -936,7 +716,7 @@ d2=d2[order(d2$Opponent,d2$Position,d2$Year,d2$Week),]
 d2$YearWeek = d2$Year*100+d2$Week
 ```
 
-### Generate moving 7 week team defense statistics
+#### Generate moving 7 week team defense statistics
 ```{r}
 
 #Calculate the 6 week running mean, median, and std deviation of total points scored against each defense by each position
@@ -971,7 +751,7 @@ d3 = merge(d2,dPAP,by=c("Year","YearWeek","Position","Opponent"))
 d3 = merge(d3,dPAP2,by="Position")
 ```
 
-### Generate moving 5 week player offense statistic
+#### Generate moving 5 week player offense statistic
 ```{r}
 #Calculate 5 week median and std deviations for each player
 d4=d3[order(d3$PlayerId,d3$YearWeek),]
@@ -1003,7 +783,7 @@ d4 = d4[!is.na(d4$AvgPts5Wks), ]
 d4 = d4[d4$Year>2014,]
 ```
 
-## Player Offense and defense Rank
+### Player Offense and defense Rank
 ```{r}
 createRankColumn <- function(data, rank_column) {
   year_week = unique(data[,c('YearWeek')])
@@ -1058,7 +838,7 @@ write.csv(d4, file = "fdpfinal.csv",row.names=FALSE, na="")
 ```
 
 
-## Density Plots
+### Density Plots
 
 ```{r}
 #FanDuelPts distribution by position
@@ -1083,5 +863,597 @@ densityplot(~AvgPts5Wks, data=d4[d4$PlayerId>2920 & d4$PlayerId<2930,],groups=Na
 densityplot(~AvgOppPAP7Wks, data=d4,groups=Position,auto.key = TRUE, adjust=1.2)
 
 ```
+
+## Computation
+
+### Training Data Setup
+
+```{r eval=FALSE}
+fdp_train=fdp[fdp$Year == 2016  & ((fdp$Position == "QB"& fdp$FanDuelSalary > 6500 & !is.na(fdp$FanDuelSalary))|fdp$Position == "PK"), ]
+```
+
+```{r eval=FALSE}
+fdp_test =fdp_train[fdp_train$YearWeek >= 201615, ]
+fdp_test = droplevels(fdp_test)
+fdp_train=fdp_train[fdp_train$YearWeek < 201615, ]
+fdp_train = droplevels(fdp_train)
+```
+
+```{r eval=FALSE}
+Num.Opponent = length(unique(fdp_train[, "Opponent"]))
+Num.Position = length(unique(fdp_train[, "Position"]))
+#Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
+Num.fixed.pred=1 #AvgOppPAP7Wks
+Num.Rank = length(unique(fdp_train[, "Rank"]))
+Num.HomeAwayInit = Num.Rank
+Model.File.Ext = ""
+
+X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
+X.home = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+X.away = model.matrix(~ 0 + Rank:Position , data=fdp_train)
+
+
+X.home = X.home * fdp_train$HomeGame
+X.away = X.away * (1- fdp_train$HomeGame)
+X = cbind(X.defense, X.home, X.away)
+
+```
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+library(rjags)
+set.seed(20171008)
+
+```
+
+###Initialization
+
+```{r eval=FALSE}
+# Initialization List for the 4 chains
+jags.inits=list(
+  list( sigmasqinv=    0.01,  delta = rep(-100000, Num.Position * Num.fixed.pred),
+        eta = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
+  list( sigmasqinv=    0.01,  delta = rep(100000, Num.Position * Num.fixed.pred),
+        eta = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
+  list( sigmasqinv=0.000001,  delta = rep(-100000, Num.Position * Num.fixed.pred),
+        eta = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
+  list( sigmasqinv=0.000001,  delta = rep(100000, Num.Position * Num.fixed.pred),
+        eta = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
+)
+
+data.jags <- list(
+  y= fdp_train$FanDuelPts,
+  alpha = fdp_train$AvgPts5Wks,
+  X.defense = X.defense,
+  X.home = X.home,
+  X.away = X.away,
+  Num.fixed.pred=Num.fixed.pred,
+  Num.Position=Num.Position,
+  #Num.Opponent=Num.Opponent,
+  Num.Rank=Num.Rank
+)
+```
+
+```{r warning=FALSE,eval=FALSE}
+burnAndSample = function(m, N.burnin, N.iter, show.plot, mon.col, n.thin=1) {
+  update(m, N.burnin) # burn-in
+  
+  x <- coda.samples(m, mon.col, n.iter=N.iter, n.thin)
+  
+  if(show.plot) {
+    plot(x, smooth=FALSE)
+  }
+  
+  gelman.R = gelman.diag(x, autoburnin=FALSE, multivariate = FALSE)
+
+  result <- list(
+    coda.sam = x, 
+    gelman.R.max=max(gelman.R$psrf[, 1]),
+    gelman.R = gelman.R
+  )
+  
+  return(result)
+}
+
+```
+
+```{r warning=FALSE,eval=FALSE}
+runModel=FALSE
+runSample=FALSE
+
+mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
+
+NSim = 30000
+NChain = 4
+NThin = 5
+NTotalSim = NSim * NChain / 5
+if (runModel) {
+  m <- jags.model("fdp.bug", data.jags, inits = jags.inits, n.chains=NChain, n.adapt = 1000)
+  save(file=paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""), list="m")
+} else {
+  load(paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""))
+  m$recompile()
+}
+
+load.module("dic")
+
+N.Retry.Loop = 1
+if (runSample) {
+  N.burnin=2500/2
+  for (loopIdx in 1:N.Retry.Loop) {
+    (start_time <- Sys.time())
+    (N.burnin = N.burnin * 2)
+    result = burnAndSample(m, N.burnin, NSim, show.plot=FALSE, mon.col = mon.col, n.thin=NChain)
+    (end_time <- Sys.time())
+    (result$gelman.R.max)    
+  }
+  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
+  save(file=paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""), list="result")
+  save(file=paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""), list="m")
+} else {
+  N.burnin=2500/2 * (2**N.Retry.Loop)
+  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
+  load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
+  load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
+  m$recompile()
+}
+```
+
+###Convergence diagnostics
+
+####Trace Plots
+
+The trace plots of all parameters show good distribution convergence.  Please see *Appendices - Converage diagnostics* for all trace plots and the Gelman Statistics summary, and MCMC Summary
+
+```{r fig.width=10,fig.height=11}
+plot(result$coda.sam, smooth=FALSE)
+```
+
+####Gelman Statistics
+
+```{r }
+result$gelman.R
+```
+
+Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
+
+###MCMC Summary
+```{r}
+(m.summary = summary(result$coda.sam))
+```
+
+
+\newpage
+##Model Assessment
+
+###General posterior model assumption check
+
+*Probabiliy of players should perform better at home than away*
+
+```{r eval=FALSE}
+post.samp = as.matrix(result$coda.sam)
+
+beta.home = post.samp[, paste("beta.home[",1:(Num.Rank*Num.Position),"]", sep="")]
+beta.away = post.samp[, paste("beta.away[",1:(Num.Rank*Num.Position),"]", sep="")]
+
+prob.home.away = rep(0, Num.Rank * Num.Position)
+for (r in 1:Num.Rank) {
+  for (p in 1:Num.Position) {
+    idx = (p-1) * Num.Rank + r
+    prob.home.away[idx] = mean(beta.home[, idx] > beta.away[, idx])
+  }
+}
+prob.home.away
+prob.home.away.df = data.frame(colnames(X.home))
+prob.home.away.df$prob.home.bt.away = prob.home.away
+
+colnames(prob.home.away.df) = c("Rank:Position", "Prob.home.bt.away")
+
+kable(prob.home.away.df)
+
+```
+
+The above table shows that players perform better at home than away as expected.
+
+*Beta defense*
+
+If a player is facing a team which gives up more points to players on average, we expect the player will score more points.
+```{r eval=FALSE}
+Num.fixed.size=Num.Position*Num.fixed.pred
+beta.defense = post.samp[, paste("beta.defense[",1:Num.fixed.size,"]", sep="")]
+
+beta.defense.int.df = data.frame(colnames(X.defense))
+beta.defense.int = matrix(rep(0, Num.fixed.size * 4), nrow=Num.fixed.size, ncol = 4)
+
+int.alpha=0.05
+for (p in 1:Num.Position) {
+  for (f in 1:Num.fixed.pred) {
+    idx = (f-1) * Num.Position + p
+      beta.defense.int[idx, 1:3] =  quantile(beta.defense[, idx], c(int.alpha/2, 0.5, 1-int.alpha/2))
+      beta.defense.int[idx, 4] = mean(beta.defense[, idx])
+  }
+}
+
+beta.defense.int.df$pct025 = beta.defense.int[, 1]
+beta.defense.int.df$pct975 = beta.defense.int[, 3]
+beta.defense.int.df$median = beta.defense.int[, 2]
+beta.defense.int.df$mean = beta.defense.int[, 4]
+colnames(beta.defense.int.df) = c("beta.defense.position", "pct025", "pct975", "median", "mean")
+kable(beta.defense.int.df)
+
+
+```
+
+We observe that the median beta.defense for PK is positive as expected.  But for QB, it is negative, that implies QB actually scores less against bad defensive team.  
+
+
+### Posterior Predictive Check
+
+#### Error correlation Check
+A posterior predictive p-value using the following test quantity
+
+$$
+\begin{aligned}
+T(y, X, \theta ) & = |\hat{cor}(\epsilon, \text{time})|  \\
+\end{aligned}
+$$
+
+where $\hat{cor}(\epsilon, \text{time})$ is sample correlation between the error vector $\epsilon$ and the year week in the data. The larger this quantity is for the model, the less well it fits the data as that would mean the error is correlated with time.
+
+*The simulated error vectors $\epsilon$ (as rows of a matrix):*
+```{r eval=FALSE}
+error.sim <- matrix(NA, NTotalSim, nrow(fdp_train))
+y_hat.sim <- matrix(NA, NTotalSim, nrow(fdp_train))
+for(s in 1:NTotalSim) {
+  y_hat.sim[s, ] =  fdp_train$AvgPts5Wks + (X.defense %*% beta.defense[s, ]) + (X.home %*% beta.home[s, ]) + (X.away %*% beta.away[s, ])
+  error.sim[s, ] <- (fdp_train$FanDuelPts - y_hat.sim[s, ]) 
+}
+
+```
+
+*The simulated replicate error vectors $\epsilon^{rep}$ (as rows of a matrix), which are the error vectors computed using replicate response vectors $y^{rep}$:*
+
+```{r eval=FALSE}
+
+post.sigma.2.sim <- post.samp[,"sigmasq"]
+post.sigma.sim <- sqrt(post.sigma.2.sim)
+
+yreps <- matrix(NA, NTotalSim, nrow(fdp_train))
+for(s in 1:NTotalSim) {
+  yreps[s, ] <- rnorm(nrow(fdp_train), y_hat.sim[s, ], post.sigma.sim[s])
+}
+
+error.rep <- matrix(NA, NTotalSim, nrow(fdp_train))
+
+for(s in 1:NTotalSim) {
+  error.rep[s, ] <- (yreps[s, ] - y_hat.sim[s, ]) 
+}
+
+```
+
+*The simulated values of $T(y, X, \theta )$*
+```{r eval=FALSE}
+T.sim = abs(cor(t(error.sim), fdp_train$YearWeek))
+head(T.sim)
+```
+
+*The simulated values of $T(y^{rep}, X, \theta )$*
+```{r eval=FALSE}
+T.rep.sim = abs(cor(t(error.rep), fdp_train$YearWeek))
+head(T.rep.sim)
+```
+
+*The simulated values of $T(y^{rep}, X, \theta )$ versus those of  $T(y, X, \theta )$, with a reference line indicating where the two values would be equal.*
+
+```{r eval=FALSE}
+plot(T.sim, T.rep.sim, pch=".", cex=2,
+  xlim=c(min(T.sim, T.rep.sim), max(T.sim, T.rep.sim)),
+  ylim=c(min(T.sim, T.rep.sim), max(T.sim, T.rep.sim)),
+  xlab="T(y,x,theta)", ylab="T(y.rep,x,theta)")
+abline(a=0,b=1)
+```
+The posterior predictive p-value:
+
+```{r eval=FALSE}
+(p.value = mean(T.rep.sim >= T.sim))
+```
+
+The p.value is `r p.value`, > 0.05, which does not indicate any evidence of problem.
+
+#### Chi-square Discrepancy Check
+
+Chi-square discrepancy check is used to check for general model issues like mis-specified means, mis-specified variances, and over-concentrated prior.
+
+```{r eval=FALSE}
+
+
+Tchi <- numeric(NTotalSim)
+Tchirep <- numeric(NTotalSim)
+for(s in 1:NTotalSim){
+  Tchi[s] <- sum((fdp_train$FanDuelPts - y_hat.sim[s,])^2 / post.sigma.sim[s])
+  Tchirep[s] <- sum((yreps[s,] - y_hat.sim[s,])^2 / post.sigma.sim[s])
+}
+(p.value.Tchi = mean(Tchirep >= Tchi))
+```
+
+```{r eval=FALSE}
+plot(Tchi, Tchirep, pch=".", cex=2,
+  xlim=c(min(Tchi, Tchirep), max(Tchi, Tchirep)),
+  ylim=c(min(Tchi, Tchirep), max(Tchi, Tchirep)),
+  xlab="Tchi", ylab="Tchirep")
+abline(a=0,b=1)
+```
+
+The posterior predictive p-value using the chi-square discrepancy is `p.value.Tchi`=`r p.value.Tchi`.  The p-value is > 0.05.  Hence, it does not indicate any evidence of problems.
+
+#### Individual Data Point Discrepancy Check
+
+**Using $Pr(y^{rep} \geq y | y)$ as posterior predictive p-value**
+```{r eval=FALSE}
+yreps.minus.y <- matrix(NA, NTotalSim, nrow(fdp_train))
+for(s in 1:NTotalSim) {
+  yreps.minus.y[s, ] <- yreps[s, ] - fdp_train$FanDuelPts
+}
+
+(p.value.y.rep.all = mean(yreps.minus.y > 0))
+```
+
+The posterior predictive p-value using individual data point is `p.value.y.rep.all` = `r p.value.y.rep.all`, which is > 0.05.  This shows no evidence of problem.
+
+#### Non Negative Check
+
+As discussed in the model section, we use normal distribution, instead of Poisson distribution, to simplify the model.  Here we'll check the portion of predicted value < 0.
+
+```{r eval=FALSE}
+perct.lt.zero = mean(yreps < 0)
+```
+
+The percentage of predicted values that are less than zero is `perct.lt.zero` = `r perct.lt.zero`, which is relatively small.  This justify the decision to use normal to simplify our model.
+
+
+
+### Prediction
+
+We use the last week of data to check the prediction effectiveness of the model.  This is essentially a cross validation analysis.
+
+```{r eval=FALSE}
+X.defense.test = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_test)
+X.home.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
+X.away.test = model.matrix(~ 0 + Rank:Position , data=fdp_test)
+
+X.home.test = X.home.test * fdp_test$HomeGame
+X.away.test = X.away.test * (1- fdp_test$HomeGame)
+X.test = cbind(X.defense.test, X.home.test, X.away.test)
+```
+
+```{r eval=FALSE}
+y_hat.test <- matrix(NA, NTotalSim, nrow(fdp_test))
+for(s in 1:NTotalSim) {
+  y_hat.test[s, ] =  fdp_test$AvgPts5Wks + (X.defense.test %*% beta.defense[s, ]) + (X.home.test %*% beta.home[s, ]) + (X.away.test %*% beta.away[s, ])
+}
+
+y.pred <- matrix(NA, NTotalSim, nrow(fdp_test))
+for(s in 1:NTotalSim) {
+  y.pred[s, ] <- rnorm(nrow(fdp_test), y_hat.test[s, ], post.sigma.sim[s])
+}
+
+```
+
+#### Prediction of Individual Player Performance
+
+A measure of the effectiveness of this model is to predict individual player performance.  Consider an example data point, `fdp_test[1,]`
+
+```{r eval=FALSE}
+(fdp_test[1,])
+```
+
+The real FanDuelPts is `r fdp_test$FanDuelPts[1]`
+
+The predicted value has the following 95% interval
+
+```{r eval=FALSE}
+quantile(y.pred[, 1], c(0.025, 0.975))
+```
+
+which does contain the actual data value of `r fdp_test$FanDuelPts[1]`
+
+Here is the density plot of the posterior density
+
+```{r eval=FALSE}
+library(lattice)
+densityplot(y.pred[, 1])
+```
+
+#### Overall Prediction Effectiveness
+
+To measure the overall prediction effectiveness, we can look at $Pr(y_{pred} >= y)$ as a posterior p-value.
+
+```{r eval=FALSE}
+y.pred.minus.y <- matrix(NA, NTotalSim, nrow(fdp_test))
+for(s in 1:NTotalSim) {
+  y.pred.minus.y[s, ] <- y.pred[s, ] - fdp_test$FanDuelPts
+}
+
+(p.value.y.pred.all = mean(y.pred.minus.y > 0))
+```
+
+The probability of $y_{pred} >= y$ is `r p.value.y.pred.all`, close to 0.5, which implies a relatively good predictive value.  
+
+*A look at a cross section of how one simulation of a prediction of the whole test set*
+
+```{r eval=FALSE}
+for (s in 1:1) {
+  plot(fdp_test$FanDuelPts, y.pred[s, ], pch=".", cex=2,
+  xlim=c(min(y.pred[s, ], fdp_test$FanDuelPts), max(y.pred[s, ], fdp_test$FanDuelPts)),
+  ylim=c(min(y.pred[s, ], fdp_test$FanDuelPts), max(y.pred[s, ], fdp_test$FanDuelPts)),
+  xlab="y", ylab="y pred")
+  abline(a=0,b=1)
+}
+
+```
+
+\newpage
+###Alternative Model - no rank
+
+```{r eval=FALSE}
+#sink("fdp.norank.bug")
+#cat("
+model {
+  for (i in 1:length(y)) {
+    y[i] ~ dnorm(alpha[i] + inprod(X.defense[i, ], beta.defense) 
+                 + inprod(X.home[i, ], beta.home) 
+                 + inprod(X.away[i, ], beta.away), sigmasqinv)
+  }
+  
+  # The entry of the beta.defense corresponds to Opponent:Position
+  # In our model, we pool the beta.defense based on position. 
+  # i.e. All defense effects of the same position are drawn from the same distribution
+  for (p in 1:Num.Position) {
+    beta.defense[p] ~ dnorm(delta[p], 1/1000^2)
+    delta[p] ~ dnorm(0, 1/100000^2)
+  }
+  
+  # The entry of the beta.home and beta.away corresponds to Position
+  # In our model, we pool the beta.home/away based on Position
+  # NO RANK
+  for (t in 1:Num.Position) {
+    beta.home[t] ~ dnorm(eta, 1/1000^2)
+    beta.away[t] ~ dnorm(rho, 1/1000^2)
+  }
+  eta ~ dnorm(0, 1/100000^2)
+  rho ~ dnorm(0, 1/100000^2)
+
+  sigmasqinv ~ dgamma(0.0001, 0.0001)
+  sigmasq <- 1/sigmasqinv
+}
+#    ",fill = TRUE)
+#sink()
+
+```
+
+```{r eval=FALSE}
+Num.Opponent = length(unique(fdp_train[, "Opponent"]))
+Num.Position = length(unique(fdp_train[, "Position"]))
+#Num.fixed.pred=2 #AvgOppPAP7Wks + FanDuelSalary
+Num.fixed.pred=1 #AvgOppPAP7Wks
+Num.HomeAwayInit = 1
+Model.File.Ext = ".norank"
+
+X.defense = model.matrix(~ 0 + AvgOppPAP7Wks:Position, data=fdp_train)
+X.home = model.matrix(~ 0 + Position , data=fdp_train)
+X.away = model.matrix(~ 0 + Position , data=fdp_train)
+
+
+X.home = X.home * fdp_train$HomeGame
+X.away = X.away * (1- fdp_train$HomeGame)
+X = cbind(X.defense, X.home, X.away)
+
+```
+
+```{r eval=FALSE}
+# Initialization List for the 4 chains
+jags.inits=list(
+  list( sigmasqinv=    0.01,  delta = rep(-100000, Num.Position * Num.fixed.pred),
+        eta = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 ),
+  list( sigmasqinv=    0.01,  delta = rep(100000, Num.Position * Num.fixed.pred),
+        eta = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 1 ),
+  list( sigmasqinv=0.000001,  delta = rep(-100000, Num.Position * Num.fixed.pred),
+        eta = c(-100000, 100000, -100000, 100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, 100000, -100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 2 ),
+  list( sigmasqinv=0.000001,  delta = rep(100000, Num.Position * Num.fixed.pred),
+        eta = c(-100000, 100000, 100000, -100000)[1:Num.HomeAwayInit],
+        rho = c(100000, -100000, -100000, 100000)[1:Num.HomeAwayInit],
+        .RNG.name = "base::Mersenne-Twister", .RNG.seed = 20171008 + 3 )
+)
+
+data.jags <- list(
+  y= fdp_train$FanDuelPts,
+  alpha = fdp_train$AvgPts5Wks,
+  X.defense = X.defense,
+  X.home = X.home,
+  X.away = X.away,
+  Num.fixed.pred=Num.fixed.pred,
+  Num.Position=Num.Position
+  #Num.Opponent=Num.Opponent,
+  #Num.Rank=Num.Rank
+)
+```
+
+```{r warning=FALSE,eval=FALSE}
+runModel=TRUE
+runSample=TRUE
+
+mon.col <- c("delta", "eta", "rho", "beta.defense", "beta.home", "beta.away", "sigmasq")
+
+NSim = 30000
+NChain = 4
+NThin = 5
+NTotalSim = NSim * NChain / 5
+if (runModel) {
+  bug.file = "fdp.norank.bug"
+  m <- jags.model(bug.file, data.jags, inits = jags.inits, n.chains=NChain, n.adapt = 1000)
+  save(file=paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""), list="m")
+} else {
+  load(paste("fdp.jags.model.init", Model.File.Ext, ".Rdata", sep=""))
+  m$recompile()
+}
+
+load.module("dic")
+
+N.Retry.Loop = 1
+if (runSample) {
+  N.burnin=2500/2
+  for (loopIdx in 1:N.Retry.Loop) {
+    (start_time <- Sys.time())
+    (N.burnin = N.burnin * 2)
+    result = burnAndSample(m, N.burnin, NSim, show.plot=FALSE, mon.col = mon.col, n.thin=NChain)
+    (end_time <- Sys.time())
+    (result$gelman.R.max)    
+  }
+  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
+  save(file=paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""), list="result")
+  save(file=paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""), list="m")
+} else {
+  N.burnin=2500/2 * (2**N.Retry.Loop)
+  run.params = paste(".", N.burnin, ".", NChain, ".", NSim, ".", NThin, sep="")
+  load(paste("fdp.jags.samples", run.params, Model.File.Ext, ".Rdata", sep=""))
+  load(paste("fdp.jags.model", run.params, Model.File.Ext, ".Rdata", sep=""))
+  m$recompile()
+  gelman.diag(result$coda.sam, autoburnin=FALSE, multivariate = FALSE)
+}
+```
+
+Converged as `gelman.R.max` = `r result$gelman.R.max` < 1.1 and the plot also looks good.
+
+```{r eval=FALSE}
+(m.summary = summary(result$coda.sam))
+```
+
+
+*Effective Sample Size*
+```{r eval=FALSE}
+(eff.size = effectiveSize(result$coda.sam[, ]))
+```
+The effective sample sizes of all parameters are greater than 400.
+
+*DIC*
+```{r eval=FALSE}
+(dic.samp = dic.samples(m, NTotalSim))
+
+```
+
+The effective number of parameters("penalty") is 7.02, and the Plummer's DIC ("Penalized deviance") is 4781.  This model has a higher DIC compared with the original one with rank(4719).  Hence, we conclude that the original model (with rank) is better for prediction.
 
 
